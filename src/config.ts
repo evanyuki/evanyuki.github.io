@@ -89,3 +89,11 @@ export const expressiveCodeConfig: ExpressiveCodeConfig = {
 	// Please select a dark theme, as this blog theme currently only supports dark background color
 	theme: "github-dark",
 };
+
+// KKAPI-Open API配置
+export const apiConfig = {
+	baseUrl:
+		import.meta.env.PUBLIC_KKAPI_BASE_URL || "http://localhost:3000",
+	userId: import.meta.env.PUBLIC_KKAPI_USER_ID || "",
+	defaultPageSize: 20,
+} as const;

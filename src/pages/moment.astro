@@ -1,13 +1,63 @@
 ---
-import ArchivePanel from "@components/ArchivePanel.svelte";
+import { Icon } from "astro-icon/components";
+import ISpeakPanel from "@components/ISpeakPanel.svelte";
 import I18nKey from "@i18n/i18nKey";
 import { i18n } from "@i18n/translation";
 import MainGridLayout from "@layouts/MainGridLayout.astro";
-import { getSortedPostsList } from "../utils/content-utils";
+import { fetchISpeakListClient } from "../utils/ispeak-client-utils";
+import { apiConfig } from "../config";
 
-const sortedPostsList = await getSortedPostsList();
+// 从配置中获取当前用户ID
+const currentUserId = apiConfig.userId;
+
+// 获取ISpeak数据（默认使用公开API）
+let ispeakData;
+let error: string | null = null;
+
+try {
+  // 使用公开API获取初始数据
+  ispeakData = await fetchISpeakListClient({
+    author: apiConfig.userId,
+    page: 1,
+    pageSize: 20,
+  });
+} catch (err) {
+  error = err instanceof Error ? err.message : "获取数据失败";
+}
+
+const pageDescription = i18n(I18nKey.moment) || "记录生活的点点滴滴";
 ---
 
-<MainGridLayout title={i18n(I18nKey.moment)}>
-  <ArchivePanel sortedPosts={sortedPostsList} client:only="svelte" />
+<MainGridLayout title={i18n(I18nKey.moment)} description={pageDescription}>
+  {
+    error ? (
+      <div class="card-base px-8 py-12">
+        <div class="flex flex-col items-center justify-center text-center">
+          <Icon
+            name="material-symbols:error-outline-rounded"
+            class="w-16 h-16 text-red-500 dark:text-red-400 mb-4"
+          />
+          <h2 class="text-xl font-bold text-90 mb-2">加载失败</h2>
+          <p class="text-sm text-75 max-w-md">{error}</p>
+        </div>
+      </div>
+    ) : ispeakData && ispeakData.items && ispeakData.items.length > 0 ? (
+      <ISpeakPanel
+        initialData={ispeakData}
+        currentUserId={currentUserId || ""}
+        client:only="svelte"
+      />
+    ) : (
+      <div class="card-base px-8 py-12">
+        <div class="flex flex-col items-center justify-center text-center">
+          <Icon
+            name="material-symbols:inbox-outline-rounded"
+            class="w-16 h-16 text-50 mb-4"
+          />
+          <h2 class="text-xl font-bold text-90 mb-2">暂无动态</h2>
+          <p class="text-sm text-50">还没有发布任何动态，快去分享你的生活吧~</p>
+        </div>
+      </div>
+    )
+  }
 </MainGridLayout>
