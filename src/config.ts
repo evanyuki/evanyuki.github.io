@@ -93,7 +93,7 @@ export const expressiveCodeConfig: ExpressiveCodeConfig = {
 // KKAPI-Open API配置
 export const apiConfig = {
 	baseUrl:
-		import.meta.env.PUBLIC_KKAPI_BASE_URL || "http://localhost:3000",
-	userId: import.meta.env.PUBLIC_KKAPI_USER_ID || "",
+		import.meta.env.PUBLIC_KKAPI_BASE_URL || "https://kkapi-open-ruddy.vercel.app",
+	userId: import.meta.env.PUBLIC_KKAPI_USER_ID || "6336606fae8ea14839c4ee5d",
 	defaultPageSize: 20,
 } as const;
