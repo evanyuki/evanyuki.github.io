@@ -2,10 +2,10 @@
   import { onMount } from "svelte";
   import type { ISpeakItem, ISpeakListResponse } from "../types/ispeak";
   import ISpeakGroup from "./ISpeakGroup.svelte";
-  import { isLoggedIn, getUserInfo, logout } from "../utils/auth-utils";
+  import { logout } from "../utils/auth-utils";
   import { fetchISpeakListSmart } from "@utils/ispeak-utils";
   import { loginModal } from "../stores/loginModal";
-  import type { UserInfo } from "@/types/auth";
+  import { tokenStore, userInfoStore } from "../stores/auth";
 
   export let initialData: ISpeakListResponse;
   export let currentUserId: string = "";
@@ -23,9 +23,10 @@
   let isLoading = false;
   let error: string | null = null;
 
-  // 登录状态
-  let loggedIn = false;
-  let userInfo: UserInfo | null = null;
+  // 使用响应式 Store 管理登录状态
+  $: loggedIn = $tokenStore !== null;
+  $: userInfo = $userInfoStore;
+  $: currentUserId = userInfo?.userId || "";
 
   // 按年月分组函数
   function groupItems(items: ISpeakItem[]): Group[] {
@@ -98,28 +99,14 @@
   }
 
   onMount(() => {
-    // 检查登录状态
-    loggedIn = isLoggedIn();
-    if (loggedIn) {
-      userInfo = getUserInfo();
-      if (userInfo) {
-        currentUserId = userInfo.userId;
-      }
-    }
-
     // 初始化分组
     groups = groupItems(initialData.items);
     totalItems = initialData.total || initialData.items.length;
   });
 
   // 处理登录成功
+  // 注意：登录状态会自动通过 Store 更新，这里只需要重新加载数据
   async function handleLoginSuccess() {
-    loggedIn = true;
-    userInfo = getUserInfo();
-    if (userInfo) {
-      currentUserId = userInfo.userId;
-    }
-
     // 重新加载数据（使用认证API）
     await reloadData();
   }
@@ -130,12 +117,9 @@
   }
 
   // 处理登出
+  // 注意：登出后 Store 会自动更新，这里只需要重新加载数据
   async function handleLogout() {
     logout();
-    loggedIn = false;
-    userInfo = null;
-    currentUserId = "";
-
     // 重新加载数据（使用公开API）
     await reloadData();
   }

@@ -11,7 +11,7 @@ import { getToken } from "./auth-utils";
 /**
  * 处理API响应的公共函数
  * @param response - Fetch API响应对象
- * @param errorContext - 错误上下文信息，用于日志记录（当前未使用，保留用于未来扩展）
+ * @param errorContext - 错误上下文信息，用于日志记录
  * @param handle401 - 是否处理401错误（默认true），如果为true且是客户端环境，会自动清除token
  * @returns 解析后的API响应数据
  */
@@ -27,11 +27,13 @@ export async function handleApiResponse<T>(
 			const { logout } = await import("./auth-utils");
 			logout();
 		}
+		console.error(`[${errorContext}] 认证失败，请重新登录`);
 		throw new Error("认证失败，请重新登录");
 	}
 
 	// 检查HTTP状态码
 	if (!response.ok) {
+		console.error(`[${errorContext}] HTTP错误: status ${response.status}`);
 		throw new Error(`HTTP error! status: ${response.status}`);
 	}
 
@@ -40,6 +42,7 @@ export async function handleApiResponse<T>(
 
 	// 检查API响应码
 	if (data.code !== 0) {
+		console.error(`[${errorContext}] API请求失败:`, data.message || "未知错误");
 		throw new Error(data.message || "API请求失败");
 	}
 
@@ -137,14 +140,6 @@ export function formatISpeakTime(dateString: string): string {
 	const minutes = String(date.getMinutes()).padStart(2, "0");
 	return `${hours}:${minutes}`;
 }
-
-/**
- * 格式化日期时间（完整）
- */
-export function formatISpeakDateTime(dateString: string): string {
-	return `${formatISpeakDate(dateString)} ${formatISpeakTime(dateString)}`;
-}
-
 
 /**
  * 获取权限类型标签
