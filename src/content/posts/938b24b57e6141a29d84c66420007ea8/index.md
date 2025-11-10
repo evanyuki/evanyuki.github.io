@@ -100,7 +100,7 @@ class MyStack:
 **popleft()**
 移去并且返回一个元素，deque最左侧的那一个。如果没有元素的话，就升起 [IndexError](https://docs.python.org/zh-cn/3/library/exceptions.html#IndexError) 索引错误。
 
-```Python
+```python
 >>> from collections import deque
 >>> d = deque('ghi')                 # make a new deque with three items
 >>> for elem in d:                   # iterate over the deque's elements

@@ -19,7 +19,7 @@ Given two strings *s* and *t* , write a function to determine if *t* is an anagr
     Input: s = “rat”, t = “car”
     Output: false
 
-```Python
+```python
 # @Author：Kilien
 # @lc app=leetcode id=242 lang=python3
 #

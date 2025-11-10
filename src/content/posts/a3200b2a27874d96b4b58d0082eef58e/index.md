@@ -27,7 +27,7 @@ An input string is valid if:
     Input: “([)]”
     Output: false
 
-```Python
+```python
 # @Author：Kilien
 # @lc app=leetcode id=20 lang=python3
 #
