@@ -4,6 +4,7 @@ enum I18nKey {
 	archive = "archive",
 	moment = "moment",
 	search = "search",
+  hitokoto = "hitokoto",
 
 	tags = "tags",
 	categories = "categories",

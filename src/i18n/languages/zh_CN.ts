@@ -7,6 +7,7 @@ export const zh_CN: Translation = {
 	[Key.archive]: "归档",
 	[Key.moment]: "瞬间",
 	[Key.search]: "搜索",
+	[Key.hitokoto]: "一言",
 
 	[Key.tags]: "标签",
 	[Key.categories]: "分类",

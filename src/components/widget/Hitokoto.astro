@@ -1,0 +1,60 @@
+---
+import I18nKey from "../../i18n/i18nKey";
+import { i18n } from "../../i18n/translation";
+import WidgetLayout from "./WidgetLayout.astro";
+
+const COLLAPSED_HEIGHT = "7.5rem";
+
+interface Props {
+  class?: string;
+  style?: string;
+}
+const className = Astro.props.class;
+const style = Astro.props.style;
+
+const hitokotoData = await fetch("https://v1.hitokoto.cn?c=k")
+  .then((response) => response.json())
+  .then((data) => {
+    console.log("hitokoto", data);
+    return data;
+  })
+  .catch(console.error);
+
+const hitokoto = hitokotoData?.hitokoto || "";
+const fromWho = hitokotoData?.from_who || null;
+const from = hitokotoData?.from || "";
+const link = `https://hitokoto.cn/?uuid=${hitokotoData?.uuid}` || "#";
+---
+
+<WidgetLayout
+  name={i18n(I18nKey.hitokoto)}
+  id="hitokoto"
+  isCollapsed={false}
+  collapsedHeight={COLLAPSED_HEIGHT}
+  class={className}
+  style={style}
+>
+  <div id="hitokoto" class="flex flex-col gap-2">
+    <p class="text-base leading-relaxed text-[var(--text-color)]">
+      <a href={link} id="hitokoto_text" class="link">{hitokoto}</a>
+    </p>
+    {
+      (fromWho || from) && (
+        <div class="flex flex-col items-end gap-1 text-sm text-black/60 dark:text-white/60">
+          {fromWho && <span class="font-medium">—— {fromWho}</span>}
+          {from && <span class="text-xs italic">{from}</span>}
+        </div>
+      )
+    }
+  </div>
+
+  <style>
+    #hitokoto {
+      min-height: fit-content;
+    }
+    #hitokoto_text {
+      display: inline-block;
+      line-height: 1.8;
+    }
+  </style>
+</WidgetLayout>

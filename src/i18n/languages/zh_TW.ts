@@ -7,6 +7,7 @@ export const zh_TW: Translation = {
 	[Key.archive]: "彙整",
 	[Key.moment]: "瞬間",
 	[Key.search]: "搜尋",
+	[Key.hitokoto]: "一言",
 
 	[Key.tags]: "標籤",
 	[Key.categories]: "分類",
