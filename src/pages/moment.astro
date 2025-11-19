@@ -1,25 +1,31 @@
 ---
+// 使用服务器端渲染模式，支持 Astro Actions
+export const prerender = false;
+
 import { Icon } from "astro-icon/components";
 import ISpeakPanel from "@components/ISpeakPanel.svelte";
 import I18nKey from "@i18n/i18nKey";
 import { i18n } from "@i18n/translation";
 import MainGridLayout from "@layouts/MainGridLayout.astro";
-import { fetchISpeakListClient } from "../utils/ispeak-client-utils";
+import { fetchISpeakListData } from "../actions/ispeak";
 import { apiConfig } from "../config";
+import { getToken } from "../utils/auth-utils";
 
-// 从配置中获取当前用户ID
-const currentUserId = apiConfig.userId;
-
-// 获取ISpeak数据（默认使用公开API）
+// 服务器端：直接调用核心数据获取函数
+// 客户端组件会通过 Astro Actions API 进行后续的按需加载
 let ispeakData;
 let error: string | null = null;
 
 try {
-  // 使用公开API获取初始数据
-  ispeakData = await fetchISpeakListClient({
+  // 获取 token（服务器端从 Cookie 或 Header 读取）
+  const token = getToken(Astro.cookies, Astro.request);
+
+  // 直接调用数据获取函数（服务器端初始加载）
+  ispeakData = await fetchISpeakListData({
     author: apiConfig.userId,
     page: 1,
     pageSize: 20,
+    token: token || null,
   });
 } catch (err) {
   error = err instanceof Error ? err.message : "获取数据失败";
@@ -42,11 +48,7 @@ const pageDescription = i18n(I18nKey.moment) || "记录生活的点点滴滴";
         </div>
       </div>
     ) : ispeakData && ispeakData.items && ispeakData.items.length > 0 ? (
-      <ISpeakPanel
-        initialData={ispeakData}
-        currentUserId={currentUserId || ""}
-        client:only="svelte"
-      />
+      <ISpeakPanel initialData={ispeakData} client:only="svelte" />
     ) : (
       <div class="card-base px-8 py-12">
         <div class="flex flex-col items-center justify-center text-center">

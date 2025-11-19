@@ -17,7 +17,7 @@ draft: false
 
 链表节点的结构：
 
-```python
+```Python
 class ListNode:
     def __init__(self, x):
         self.val = x
@@ -43,7 +43,7 @@ class ListNode:
 
 ![](https://cdn.jsdelivr.net/gh/KiLien/Pics/Algm/linkedlist2.png)
 
-```python
+```Python
 x.next = cur.next;  // 将 x 的结点的 next 指针指向下一结点；
 cur.next = x;  // 将 cur 的 next 指针指向 x 结点；
 ```

@@ -2,13 +2,22 @@
   import { onMount } from "svelte";
   import type { ISpeakItem, ISpeakListResponse } from "../types/ispeak";
   import ISpeakGroup from "./ISpeakGroup.svelte";
-  import { logout } from "../utils/auth-utils";
-  import { fetchISpeakListSmart } from "@utils/ispeak-utils";
+  import {
+    logout,
+    getToken,
+    getUserInfo as getUserInfoFromUtils,
+  } from "../utils/auth-utils";
+  import { actions } from "astro:actions";
   import { loginModal } from "../stores/loginModal";
-  import { tokenStore, userInfoStore } from "../stores/auth";
+  import {
+    tokenStore,
+    userInfoStore,
+    getUserInfo,
+    setToken,
+    setUserInfo,
+  } from "../stores/auth";
 
   export let initialData: ISpeakListResponse;
-  export let currentUserId: string = "";
 
   interface Group {
     year: number;
@@ -19,168 +28,214 @@
   let groups: Group[] = [];
   let currentPage = 1;
   let totalItems = initialData.total || 0;
-  let pageSize = 20;
+  const pageSize = 20;
   let isLoading = false;
   let error: string | null = null;
 
   // 使用响应式 Store 管理登录状态
   $: loggedIn = $tokenStore !== null;
   $: userInfo = $userInfoStore;
-  $: currentUserId = userInfo?.userId || "";
 
-  // 按年月分组函数
+  /**
+   * 获取当前用户ID的辅助函数
+   * 直接从 store 获取，确保获取最新值
+   */
+  function getCurrentUserId(): string {
+    return getUserInfo()?.userId || "";
+  }
+
+  /**
+   * 按年月分组函数（优化版）
+   * 减少重复的 Date 对象创建，提升性能
+   */
   function groupItems(items: ISpeakItem[]): Group[] {
-    const grouped = items.reduce(
-      (acc, item) => {
-        const date = new Date(item.createdAt);
-        const year = date.getFullYear();
-        const month = date.getMonth() + 1;
+    if (items.length === 0) return [];
 
-        const key = `${year}-${month}`;
-        if (!acc[key]) {
-          acc[key] = {
-            year,
-            month,
-            items: [],
-          };
-        }
-        acc[key].items.push(item);
-        return acc;
-      },
-      {} as Record<string, Group>
-    );
+    const grouped = new Map<string, Group>();
 
-    // 转换为数组并排序
-    const groupArray = Object.values(grouped).sort((a, b) => {
+    // 一次性处理所有 items，减少重复操作
+    for (const item of items) {
+      const date = new Date(item.createdAt);
+      const year = date.getFullYear();
+      const month = date.getMonth() + 1;
+      const key = `${year}-${month}`;
+
+      let group = grouped.get(key);
+      if (!group) {
+        group = { year, month, items: [] };
+        grouped.set(key, group);
+      }
+      group.items.push(item);
+    }
+
+    // 转换为数组并排序（按年月降序）
+    const groupArray = Array.from(grouped.values()).sort((a, b) => {
       if (a.year !== b.year) {
         return b.year - a.year;
       }
       return b.month - a.month;
     });
 
-    // 每个组内的items按时间倒序排序
-    groupArray.forEach((group) => {
-      group.items.sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
-    });
+    // 每个组内的 items 按时间倒序排序
+    // 直接比较字符串格式的 ISO 日期，避免创建 Date 对象
+    for (const group of groupArray) {
+      group.items.sort((a, b) => {
+        // ISO 8601 格式的字符串可以直接进行字典序比较
+        return b.createdAt.localeCompare(a.createdAt);
+      });
+    }
 
     return groupArray;
   }
 
-  // 合并新数据到现有分组
+  /**
+   * 合并新数据到现有分组（优化版）
+   * 使用更高效的去重和合并策略
+   */
   function mergeGroups(
     existingGroups: Group[],
     newItems: ISpeakItem[]
   ): Group[] {
-    // 创建现有items的ID集合，用于去重
-    const existingIds = new Set<string>();
-    existingGroups.forEach((group) => {
-      group.items.forEach((item) => {
-        existingIds.add(item._id);
-      });
-    });
+    if (newItems.length === 0) return existingGroups;
 
-    // 过滤掉已存在的items
+    // 创建现有 items 的 ID 集合，用于快速去重
+    const existingIds = new Set<string>();
+    for (const group of existingGroups) {
+      for (const item of group.items) {
+        existingIds.add(item._id);
+      }
+    }
+
+    // 过滤掉已存在的 items
     const uniqueNewItems = newItems.filter(
       (item) => !existingIds.has(item._id)
     );
 
-    // 合并所有items
-    const allItems: ISpeakItem[] = [];
-    existingGroups.forEach((group) => {
-      allItems.push(...group.items);
-    });
-    allItems.push(...uniqueNewItems);
+    if (uniqueNewItems.length === 0) return existingGroups;
+
+    // 收集所有 items（使用 flatMap 更简洁）
+    const allItems: ISpeakItem[] = [
+      ...existingGroups.flatMap((group) => group.items),
+      ...uniqueNewItems,
+    ];
 
     // 重新分组
     return groupItems(allItems);
   }
 
-  onMount(() => {
-    // 初始化分组
-    groups = groupItems(initialData.items);
-    totalItems = initialData.total || initialData.items.length;
-  });
-
-  // 处理登录成功
-  // 注意：登录状态会自动通过 Store 更新，这里只需要重新加载数据
-  async function handleLoginSuccess() {
-    // 重新加载数据（使用认证API）
-    await reloadData();
-  }
-
-  // 打开登录弹窗
-  function openLoginModal() {
-    loginModal.open(handleLoginSuccess);
-  }
-
-  // 处理登出
-  // 注意：登出后 Store 会自动更新，这里只需要重新加载数据
-  async function handleLogout() {
-    logout();
-    // 重新加载数据（使用公开API）
-    await reloadData();
-  }
-
-  // 重新加载数据
-  async function reloadData() {
-    isLoading = true;
-    error = null;
-
-    try {
-      const newData = await fetchISpeakListSmart({
-        author: currentUserId || undefined,
-        page: 1,
-        pageSize: pageSize,
-      });
-
-      if (newData.items && newData.items.length > 0) {
-        groups = groupItems(newData.items);
-        totalItems = newData.total || totalItems;
-        currentPage = 1;
-      }
-    } catch (err) {
-      error = err instanceof Error ? err.message : "加载失败";
-      console.error("加载数据失败:", err);
-    } finally {
-      isLoading = false;
-    }
-  }
-
-  // 加载更多数据
-  async function loadMore() {
+  /**
+   * 统一的数据获取函数
+   * 提取公共逻辑，减少代码重复
+   */
+  async function fetchData(page: number, shouldMerge: boolean = false) {
     if (isLoading) return;
 
     isLoading = true;
     error = null;
 
     try {
-      const nextPage = currentPage + 1;
-      const newData = await fetchISpeakListSmart({
-        author: currentUserId || undefined,
-        page: nextPage,
-        pageSize: pageSize,
+      const userId = getCurrentUserId();
+      // 从 store 获取 token 并传递给 action
+      const token = $tokenStore;
+      const result = await actions.getISpeakList({
+        author: userId || undefined,
+        page,
+        pageSize,
+        token: token || null,
       });
 
-      if (newData.items && newData.items.length > 0) {
-        // 合并新数据到现有分组
+      if (result.error) {
+        throw new Error(result.error.message || "加载失败");
+      }
+
+      const newData = result.data;
+      if (!newData?.items || newData.items.length === 0) {
+        return;
+      }
+
+      if (shouldMerge) {
+        // 合并模式：用于加载更多
         groups = mergeGroups(groups, newData.items);
-        currentPage = nextPage;
-        totalItems = newData.total || totalItems;
+        currentPage = page;
+      } else {
+        // 替换模式：用于重新加载
+        groups = groupItems(newData.items);
+        currentPage = 1;
+      }
+
+      // 更新总数（优先使用新数据中的总数）
+      if (newData.total !== undefined) {
+        totalItems = newData.total;
       }
     } catch (err) {
-      error = err instanceof Error ? err.message : "加载失败";
-      console.error("加载更多数据失败:", err);
+      const errorMessage = err instanceof Error ? err.message : "加载失败";
+      error = errorMessage;
+      console.error("加载数据失败:", err);
     } finally {
       isLoading = false;
     }
   }
 
-  // 计算是否还有更多数据
-  $: hasMore =
-    groups.reduce((sum, group) => sum + group.items.length, 0) < totalItems;
+  onMount(() => {
+    // 初始化分组
+    groups = groupItems(initialData.items);
+    totalItems = initialData.total || initialData.items.length;
+
+    // 从 Cookie 恢复 token 和用户信息（用于页面刷新后恢复登录状态）
+    const token = getToken();
+    const userInfo = getUserInfoFromUtils();
+    if (token) {
+      setToken(token);
+    }
+    if (userInfo) {
+      setUserInfo(userInfo);
+    }
+  });
+
+  /**
+   * 处理登录成功
+   * 登录状态会自动通过 Store 更新，这里只需要重新加载数据
+   */
+  async function handleLoginSuccess() {
+    await reloadData();
+  }
+
+  /**
+   * 打开登录弹窗
+   */
+  function openLoginModal() {
+    loginModal.open(handleLoginSuccess);
+  }
+
+  /**
+   * 处理登出
+   * 登出后 Store 会自动更新，这里只需要重新加载数据
+   */
+  async function handleLogout() {
+    logout();
+    await reloadData();
+  }
+
+  /**
+   * 重新加载数据（重置到第一页）
+   */
+  async function reloadData() {
+    await fetchData(1, false);
+  }
+
+  /**
+   * 加载更多数据（追加到当前列表）
+   */
+  async function loadMore() {
+    await fetchData(currentPage + 1, true);
+  }
+
+  // 计算是否还有更多数据（优化：使用缓存或更高效的计算）
+  $: totalLoadedItems = groups.reduce(
+    (sum, group) => sum + group.items.length,
+    0
+  );
+  $: hasMore = totalLoadedItems < totalItems;
   $: isEmpty = groups.length === 0;
 </script>
 
