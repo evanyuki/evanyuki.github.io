@@ -23,7 +23,7 @@ import { parseDirectiveNode } from "./src/plugins/remark-directive-rehype.js";
 import { remarkExcerpt } from "./src/plugins/remark-excerpt.js";
 import { remarkReadingTime } from "./src/plugins/remark-reading-time.mjs";
 import { pluginCustomCopyButton } from "./src/plugins/expressive-code/custom-copy-button.js";
-import { pagefindCopier } from './scripts/pagefind-copier.js';
+import pagefind from "astro-pagefind";
 
 import vercel from "@astrojs/vercel";
 
@@ -32,6 +32,8 @@ export default defineConfig({
   site: "https://evanyuki.github.io",
   base: "/",
   trailingSlash: "always",
+  output: "static",
+  adapter: vercel(),
 
   integrations: [
       tailwind({
@@ -105,7 +107,7 @@ export default defineConfig({
       }),
       svelte(),
       sitemap(),
-      pagefindCopier(),
+      pagefind(),
 	],
 
   markdown: {
@@ -175,6 +177,4 @@ export default defineConfig({
           },
       },
 	},
-
-  adapter: vercel(),
 });
