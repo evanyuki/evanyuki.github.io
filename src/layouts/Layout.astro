@@ -177,11 +177,47 @@ const bannerOffset =
       href={`${Astro.site}rss.xml`}
     />
     <!-- Pagefind 搜索脚本（懒加载，仅在用户打开搜索时初始化） -->
-    {
-      import.meta.env.PROD && (
-        <script src="/pagefind/pagefind.js" type="module" async />
-      )
-    }
+    <script type="module">
+      try {
+        const pagefindModule = await import("/pagefind/pagefind.js");
+        const Pagefind = pagefindModule.default || pagefindModule;
+
+        if (!Pagefind) {
+          throw new Error("Pagefind module is empty");
+        }
+
+        // 尝试作为构造函数初始化
+        if (typeof Pagefind === "function") {
+          window.pagefind = new Pagefind();
+        }
+        // 尝试作为对象，调用 init 方法
+        else if (typeof Pagefind.init === "function") {
+          window.pagefind = Pagefind;
+          Pagefind.init();
+        }
+        // 如果 Pagefind 本身就是一个可用的实例
+        else if (Pagefind && typeof Pagefind.search === "function") {
+          window.pagefind = Pagefind;
+        } else {
+          throw new Error("Pagefind initialization method not found");
+        }
+
+        // 派发 pagefind 初始化完成事件
+        window.dispatchEvent(
+          new CustomEvent("pagefind:ready", {
+            detail: { success: true },
+          })
+        );
+      } catch (error) {
+        console.error("Pagefind initialization failed:", error);
+        // 即使初始化失败也派发事件，让组件知道可以停止等待
+        window.dispatchEvent(
+          new CustomEvent("pagefind:ready", {
+            detail: { success: false, error },
+          })
+        );
+      }
+    </script>
   </head>
   <body
     class="min-h-screen transition"

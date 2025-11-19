@@ -2,34 +2,18 @@
   import I18nKey from "@i18n/i18nKey";
   import { i18n } from "@i18n/translation";
   import Icon from "@iconify/svelte";
-  import { url } from "@utils/url-utils.ts";
   import { onMount } from "svelte";
   import type { SearchResult } from "@/global";
+  import { url } from "@/utils/url-utils";
 
   let keywordDesktop = "";
   let keywordMobile = "";
   let result: SearchResult[] = [];
   let isSearching = false;
-  let initialized = false;
-  let pagefind: any = null;
 
-  const fakeResult: SearchResult[] = [
-    {
-      url: url("/"),
-      meta: {
-        title: "This Is a Fake Search Result",
-      },
-      excerpt:
-        "Because the search cannot work in the <mark>dev</mark> environment.",
-    },
-    {
-      url: url("/"),
-      meta: {
-        title: "If You Want to Test the Search",
-      },
-      excerpt: "Try running <mark>npm build && npm preview</mark> instead.",
-    },
-  ];
+  // 防抖定时器
+  let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  const SEARCH_DEBOUNCE_DELAY = 300; // 300ms 防抖延迟
 
   const togglePanel = () => {
     const panel = document.getElementById("search-panel");
@@ -47,126 +31,100 @@
     }
   };
 
-  // 初始化 Pagefind
-  const initPagefind = async (): Promise<void> => {
-    if (import.meta.env.DEV) {
-      // 开发环境不加载 Pagefind
-      initialized = true;
-      return;
-    }
-
-    try {
-      // 等待 Pagefind 脚本加载完成
-      // Pagefind 通过 script 标签加载，会在 window 上暴露 Pagefind 类
-      let retries = 0;
-      const maxRetries = 10;
-
-      while (retries < maxRetries) {
-        if (window.Pagefind) {
-          pagefind = new window.Pagefind();
-          initialized = true;
-          return;
-        }
-        await new Promise((resolve) => setTimeout(resolve, 100));
-        retries++;
-      }
-
-      console.warn("Pagefind not loaded after timeout");
-      initialized = true; // 即使失败也标记为已初始化，避免阻塞
-    } catch (error) {
-      console.error("Failed to load Pagefind:", error);
-      initialized = true; // 即使失败也标记为已初始化，避免阻塞
-    }
-  };
+  // Pagefind 结果类型定义
+  interface PagefindResult {
+    url?: string;
+    meta?: { title?: string };
+    excerpt?: string;
+    data?: () => Promise<PagefindResult>;
+  }
 
   // 将 Pagefind 结果转换为 SearchResult 格式
-  const convertPagefindResult = (pagefindResult: any): SearchResult => {
-    // Pagefind 返回的数据结构
-    const url = pagefindResult.url || pagefindResult.data?.url || "";
-    const title =
-      pagefindResult.meta?.title || pagefindResult.data?.meta?.title || "";
+  const convertPagefindResult = (
+    pagefindResult: PagefindResult
+  ): SearchResult | null => {
+    try {
+      // Pagefind 返回的数据结构
+      const resultUrl = pagefindResult.url || "";
+      const title = pagefindResult.meta?.title || "";
 
-    // 提取摘要，Pagefind 已经包含高亮标记
-    let excerpt = pagefindResult.excerpt || pagefindResult.data?.excerpt || "";
+      // 提取摘要，Pagefind 已经包含高亮标记
+      const excerpt = pagefindResult.excerpt || "";
 
-    // 如果 Pagefind 没有提供标题，尝试从 URL 推断
-    let finalTitle = title;
-    if (!finalTitle && url) {
-      const urlParts = url.split("/").filter(Boolean);
-      finalTitle = urlParts[urlParts.length - 1] || "Untitled";
-      // 移除文件扩展名
-      finalTitle = finalTitle.replace(/\.(html|htm)$/i, "");
-      // URL 解码
-      try {
-        finalTitle = decodeURIComponent(finalTitle);
-      } catch (e) {
-        // 忽略解码错误
+      // 如果 Pagefind 没有提供标题，尝试从 URL 推断
+      let finalTitle = title;
+      if (!finalTitle && resultUrl) {
+        const urlParts = resultUrl.split("/").filter(Boolean);
+        finalTitle = urlParts[urlParts.length - 1] || "Untitled";
+        // 移除文件扩展名
+        finalTitle = finalTitle.replace(/\.(html|htm)$/i, "");
+        // URL 解码
+        try {
+          finalTitle = decodeURIComponent(finalTitle);
+        } catch {
+          // 忽略解码错误
+        }
       }
-    }
 
-    return {
-      url: url || url("/"),
-      meta: {
-        title: finalTitle || "Untitled",
-      },
-      excerpt: excerpt || "",
-    };
+      return {
+        url: resultUrl || url("/"),
+        meta: {
+          title: finalTitle || "Untitled",
+        },
+        excerpt: excerpt || "",
+      };
+    } catch (error) {
+      console.error("Error converting pagefind result:", error);
+      return null;
+    }
   };
 
-  const search = async (keyword: string, isDesktop: boolean): Promise<void> => {
-    if (!keyword) {
+  const performSearch = async (
+    keyword: string,
+    isDesktop: boolean
+  ): Promise<void> => {
+    if (!keyword.trim()) {
       setPanelVisibility(false, isDesktop);
       result = [];
       return;
     }
 
-    if (!initialized) {
+    if (!window.pagefind) {
       return;
     }
 
     isSearching = true;
 
     try {
-      let searchResults: SearchResult[] = [];
+      const searchResponse = await window.pagefind.search(keyword);
 
-      if (import.meta.env.DEV) {
-        // 开发环境使用假数据
-        searchResults = fakeResult;
-      } else if (pagefind) {
-        // 生产环境使用 Pagefind
-        try {
-          const searchResponse = await pagefind.search(keyword);
+      if (searchResponse?.results) {
+        // 获取前 10 个结果
+        const results = searchResponse.results.slice(0, 10);
 
-          if (searchResponse && searchResponse.results) {
-            // 获取前 10 个结果
-            const results = searchResponse.results.slice(0, 10);
+        // 获取每个结果的详细信息
+        const detailedResults = await Promise.all(
+          results.map(async (resultItem: PagefindResult) => {
+            try {
+              // 如果 resultItem 有 data 方法，调用它获取详细信息
+              const data =
+                typeof resultItem.data === "function"
+                  ? await resultItem.data()
+                  : resultItem;
+              return convertPagefindResult(data);
+            } catch (error) {
+              console.error("Error fetching result data:", error);
+              // 如果获取详细数据失败，使用基本信息
+              return convertPagefindResult(resultItem);
+            }
+          })
+        );
 
-            // 获取每个结果的详细信息
-            const detailedResults = await Promise.all(
-              results.map(async (resultItem: any) => {
-                try {
-                  const data = await resultItem.data();
-                  return convertPagefindResult(data);
-                } catch (error) {
-                  console.error("Error fetching result data:", error);
-                  // 如果获取详细数据失败，使用基本信息
-                  return convertPagefindResult(resultItem);
-                }
-              })
-            );
-
-            searchResults = detailedResults.filter(Boolean);
-          }
-        } catch (error) {
-          console.error("Pagefind search error:", error);
-          searchResults = [];
-        }
+        result = detailedResults.filter((r): r is SearchResult => r !== null);
       } else {
-        // Pagefind 未加载，返回空结果
-        searchResults = [];
+        result = [];
       }
 
-      result = searchResults;
       setPanelVisibility(result.length > 0, isDesktop);
     } catch (error) {
       console.error("Search error:", error);
@@ -177,25 +135,68 @@
     }
   };
 
-  onMount(async () => {
-    // 初始化 Pagefind
-    await initPagefind();
+  // 带防抖的搜索函数
+  const search = (keyword: string, isDesktop: boolean): void => {
+    // 清除之前的定时器
+    if (searchDebounceTimer) {
+      clearTimeout(searchDebounceTimer);
+    }
 
-    // 初始化后执行搜索
-    if (keywordDesktop) await search(keywordDesktop, true);
-    if (keywordMobile) await search(keywordMobile, false);
+    // 如果关键词为空，立即执行（不需要防抖）
+    if (!keyword.trim()) {
+      performSearch(keyword, isDesktop);
+      return;
+    }
+
+    // 设置新的防抖定时器
+    searchDebounceTimer = setTimeout(() => {
+      performSearch(keyword, isDesktop);
+    }, SEARCH_DEBOUNCE_DELAY);
+  };
+
+  onMount(() => {
+    let handlePagefindReady: (() => void) | null = null;
+
+    // 监听 pagefind 初始化完成事件
+    handlePagefindReady = () => {
+      // 初始化后执行搜索
+      if (window.pagefind) {
+        if (keywordDesktop) search(keywordDesktop, true);
+        if (keywordMobile) search(keywordMobile, false);
+      }
+    };
+
+    // 如果 pagefind 已经初始化，立即执行搜索
+    if (window.pagefind) {
+      handlePagefindReady();
+    } else {
+      // 否则监听初始化完成事件（使用 once: true，不需要手动清理）
+      window.addEventListener("pagefind:ready", handlePagefindReady, {
+        once: true,
+      });
+    }
+
+    // 清理函数：组件卸载时清除防抖定时器
+    return () => {
+      if (searchDebounceTimer) {
+        clearTimeout(searchDebounceTimer);
+        searchDebounceTimer = null;
+      }
+    };
   });
 
-  $: if (initialized && keywordDesktop) {
-    (async () => {
-      await search(keywordDesktop, true);
-    })();
+  // 响应式搜索：桌面端
+  $: if (keywordDesktop !== undefined) {
+    if (window.pagefind) {
+      search(keywordDesktop, true);
+    }
   }
 
-  $: if (initialized && keywordMobile) {
-    (async () => {
-      await search(keywordMobile, false);
-    })();
+  // 响应式搜索：移动端
+  $: if (keywordMobile !== undefined) {
+    if (window.pagefind) {
+      search(keywordMobile, false);
+    }
   }
 </script>
 
@@ -271,7 +272,7 @@ top-20 left-4 md:left-[unset] right-4 shadow-2xl rounded-2xl p-2"
           class="transition text-[0.75rem] translate-x-1 my-auto text-[var(--primary)]"
         ></Icon>
       </div>
-      <div class="transition text-sm text-50">
+      <div class="transition text-sm text-50 line-clamp-3">
         {@html item.excerpt}
       </div>
     </a>
