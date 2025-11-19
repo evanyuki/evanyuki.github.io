@@ -98,38 +98,66 @@ function loadButtonScript() {
 loadButtonScript();
 </script>
 
-{import.meta.env.PROD && <script is:inline define:vars={{scriptUrl: url('/pagefind/pagefind.js')}}>
-async function loadPagefind() {
-    try {
-        const response = await fetch(scriptUrl, { method: 'HEAD' });
-        if (!response.ok) {
-            throw new Error(`Pagefind script not found: ${response.status}`);
-        }
-
-        const pagefind = await import(scriptUrl);
-
-        await pagefind.options({
-            excerptLength: 20
-        });
-
-        window.pagefind = pagefind;
-
-        document.dispatchEvent(new CustomEvent('pagefindready'));
-        console.log('Pagefind loaded and initialized successfully, event dispatched.');
-    } catch (error) {
-        console.error('Failed to load Pagefind:', error);
-        window.pagefind = {
-            search: () => Promise.resolve({ results: [] }),
-            options: () => Promise.resolve(),
-        };
-        document.dispatchEvent(new CustomEvent('pagefindloaderror'));
-        console.log('Pagefind load error, event dispatched.');
-    }
-}
-
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', loadPagefind);
-} else {
-    loadPagefind();
-}
-</script>}
+{import.meta.env.PROD && (
+    <>
+        <script is:inline define:vars={{baseUrl: import.meta.env.BASE_URL}}>
+            (function() {
+                // Build Pagefind script URL using base URL for subpath compatibility
+                const baseUrl = typeof baseUrl !== 'undefined' ? baseUrl : '/';
+                const scriptUrl = `${baseUrl}pagefind/pagefind.js`.replace(/\/+/g, '/');
+                
+                // Create and load script tag
+                const script = document.createElement('script');
+                script.src = scriptUrl;
+                script.type = 'module';
+                
+                script.onload = async function() {
+                    try {
+                        // Import pagefind module
+                        const pagefind = await import(scriptUrl);
+                        
+                        // Configure pagefind
+                        if (pagefind.options) {
+                            await pagefind.options({
+                                excerptLength: 20
+                            });
+                        }
+                        
+                        // Make pagefind available globally
+                        window.pagefind = pagefind;
+                        
+                        // Dispatch ready event
+                        document.dispatchEvent(new CustomEvent('pagefindready'));
+                        console.log('Pagefind loaded and initialized successfully, event dispatched.');
+                    } catch (error) {
+                        console.error('Failed to initialize Pagefind:', error);
+                        window.pagefind = {
+                            search: () => Promise.resolve({ results: [] }),
+                            options: () => Promise.resolve(),
+                        };
+                        document.dispatchEvent(new CustomEvent('pagefindloaderror'));
+                    }
+                };
+                
+                script.onerror = function() {
+                    console.error('Failed to load Pagefind script:', scriptUrl);
+                    window.pagefind = {
+                        search: () => Promise.resolve({ results: [] }),
+                        options: () => Promise.resolve(),
+                    };
+                    document.dispatchEvent(new CustomEvent('pagefindloaderror'));
+                    console.log('Pagefind load error, event dispatched.');
+                };
+                
+                // Load script
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', function() {
+                        document.head.appendChild(script);
+                    });
+                } else {
+                    document.head.appendChild(script);
+                }
+            })();
+        </script>
+    </>
+)}
