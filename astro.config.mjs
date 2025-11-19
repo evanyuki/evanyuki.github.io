@@ -23,7 +23,6 @@ import { parseDirectiveNode } from "./src/plugins/remark-directive-rehype.js";
 import { remarkExcerpt } from "./src/plugins/remark-excerpt.js";
 import { remarkReadingTime } from "./src/plugins/remark-reading-time.mjs";
 import { pluginCustomCopyButton } from "./src/plugins/expressive-code/custom-copy-button.js";
-import pagefindIntegration from "./src/integrations/pagefind.ts";
 
 import vercel from "@astrojs/vercel";
 
@@ -105,7 +104,6 @@ export default defineConfig({
       }),
       svelte(),
       sitemap(),
-      pagefindIntegration(),
 	],
 
   markdown: {
@@ -146,7 +144,6 @@ export default defineConfig({
                       tagName: "span",
                       properties: {
                           className: ["anchor-icon"],
-                          "data-pagefind-ignore": true,
                       },
                       children: [
                           {

@@ -4,10 +4,17 @@ declare global {
 	interface Window {
 		// type from '@swup/astro' is incorrect
 		swup: AstroIntegration;
-		pagefind: {
+		// Pagefind 类型声明
+		Pagefind?: new () => {
 			search: (query: string) => Promise<{
 				results: Array<{
-					data: () => Promise<SearchResult>;
+					data: () => Promise<{
+						url?: string;
+						meta?: {
+							title?: string;
+						};
+						excerpt?: string;
+					}>;
 				}>;
 			}>;
 		};

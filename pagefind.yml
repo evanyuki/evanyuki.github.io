@@ -1,6 +1,39 @@
+# Pagefind 配置文件
+# 更多配置选项：https://pagefind.app/docs/config-options
+
+# 扫描的站点目录（相对于项目根目录）
+site: dist
+
+# 排除的文件和目录
 exclude_selectors:
-  - "span.katex"
-  - "span.katex-display"
-  - "[data-pagefind-ignore]"
-  - ".search-panel"
-  - "#search-panel"
+  - "nav"
+  - "header"
+  - "footer"
+  - ".navbar"
+  - ".toc"
+  - "script"
+  - "style"
+
+# 索引选项
+indexing:
+  # 索引 HTML 内容
+  html_selector: "main"
+  # 排除某些元素
+  exclude_selectors:
+    - "nav"
+    - "header"
+    - "footer"
+    - ".navbar"
+    - ".toc"
+    - "script"
+    - "style"
+    - ".code-block"
+    - "pre"
+    - "code"
+
+# 语言设置（支持中文）
+language: "zh"
+
+# 输出选项
+verbose: false
+

@@ -176,6 +176,12 @@ const bannerOffset =
       title={profileConfig.name}
       href={`${Astro.site}rss.xml`}
     />
+    <!-- Pagefind 搜索脚本（懒加载，仅在用户打开搜索时初始化） -->
+    {
+      import.meta.env.PROD && (
+        <script src="/pagefind/pagefind.js" type="module" async />
+      )
+    }
   </head>
   <body
     class="min-h-screen transition"
