@@ -138,9 +138,9 @@ export const getISpeakList = defineAction({
 		author: z.string().optional(),
 		page: z.number().optional().default(1),
 		pageSize: z.number().optional().default(20),
-		token: z.string().nullable().optional(),
 	}),
-	handler: async ({ author, page, pageSize, token }) => {
+	handler: async ({ author, page, pageSize }, context) => {
+		const token = getToken(context.cookies, context.request);
 		return await fetchISpeakListData({ author, page, pageSize, token });
 	},
 });

@@ -135,13 +135,10 @@
 
     try {
       const userId = getCurrentUserId();
-      // 从 store 获取 token 并传递给 action
-      const token = $tokenStore;
       const result = await actions.getISpeakList({
         author: userId || undefined,
         page,
         pageSize,
-        token: token || null,
       });
 
       if (result.error) {

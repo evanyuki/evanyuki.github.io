@@ -7,26 +7,26 @@ import ISpeakPanel from "@components/ISpeakPanel.svelte";
 import I18nKey from "@i18n/i18nKey";
 import { i18n } from "@i18n/translation";
 import MainGridLayout from "@layouts/MainGridLayout.astro";
-import { fetchISpeakListData } from "../actions/ispeak";
+import { getISpeakList } from "../actions/ispeak";
 import { apiConfig } from "../config";
-import { getToken } from "../utils/auth-utils";
 
-// 服务器端：直接调用核心数据获取函数
+// 服务器端：通过 Action 获取首屏数据
 // 客户端组件会通过 Astro Actions API 进行后续的按需加载
 let ispeakData;
 let error: string | null = null;
 
 try {
-  // 获取 token（服务器端从 Cookie 或 Header 读取）
-  const token = getToken(Astro.cookies, Astro.request);
-
-  // 直接调用数据获取函数（服务器端初始加载）
-  ispeakData = await fetchISpeakListData({
+  const result = await Astro.callAction(getISpeakList, {
     author: apiConfig.userId,
     page: 1,
     pageSize: 20,
-    token: token || null,
   });
+
+  if (result.error) {
+    throw new Error(result.error.message || "获取数据失败");
+  }
+
+  ispeakData = result.data;
 } catch (err) {
   error = err instanceof Error ? err.message : "获取数据失败";
 }
