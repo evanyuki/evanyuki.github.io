@@ -17,6 +17,7 @@ export const LinkPresets: { [key in LinkPreset]: NavBarLink } = {
 	},
 	[LinkPreset.Moment]: {
 		name: i18n(I18nKey.moment),
-		url: "/moment/",
+		url: "https://me.evanyuki.com",
+		external: true,
 	},
 };
