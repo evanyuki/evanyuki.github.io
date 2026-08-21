@@ -1,4 +1,5 @@
 ---
+import Signature from "@assets/images/evanyuki-signature.svg";
 import { Icon } from "astro-icon/components";
 import { licenseConfig, profileConfig } from "../../config";
 import I18nKey from "../../i18n/i18nKey";
@@ -39,5 +40,46 @@ const postUrl = decodeURIComponent(Astro.url.toString());
             <a href={licenseConf.url} target="_blank" class="link text-[var(--primary)] line-clamp-2">{licenseConf.name}</a>
         </div>
     </div>
+    <Signature
+        role="img"
+        aria-label="Evanyuki signature"
+        class="post-signature absolute z-10 pointer-events-none right-6 top-1/2 h-auto w-28 max-w-[45%] -translate-y-1/2 md:w-[12.5rem] dark:invert"
+    />
     <Icon name="fa6-brands:creative-commons" class="transition text-[15rem] absolute pointer-events-none right-6 top-1/2 -translate-y-1/2 text-black/5 dark:text-white/5"></Icon>
 </div>
+
+<style is:global>
+    .post-signature {
+        animation: signature-draw-loop 5s cubic-bezier(0.35, 0, 0.15, 1) infinite;
+        animation-delay: 0ms !important;
+        clip-path: inset(0 100% 0 0);
+        will-change: clip-path, opacity;
+    }
+
+    @keyframes signature-draw-loop {
+        0%,
+        10% {
+            opacity: 0;
+            clip-path: inset(0 100% 0 0);
+        }
+
+        30%,
+        90% {
+            opacity: 0.8;
+            clip-path: inset(0 0 0 0);
+        }
+
+        100% {
+            opacity: 0;
+            clip-path: inset(0 0 0 100%);
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .post-signature {
+            animation: none;
+            opacity: 0.8;
+            clip-path: none;
+        }
+    }
+</style>
