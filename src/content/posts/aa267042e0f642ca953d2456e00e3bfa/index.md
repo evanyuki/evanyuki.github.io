@@ -1,7 +1,7 @@
 ---
 title: Google & DeepL API
 published: 2023-04-18
-description: ''
+description: '使用 Google Translate API 与 DeepL API 进行文本翻译的 Axios 调用示例，包含请求参数和鉴权配置。'
 image: 'https://picsum.photos/seed/aa267042e0f642ca953d2456e00e3bfa/1920/1080'
 tags: ["deepl","google","api"]
 category: '技术'

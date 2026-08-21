@@ -21,7 +21,7 @@ export async function GET(context: APIContext) {
 
 	return rss({
 		title: siteConfig.title,
-		description: siteConfig.subtitle || "No description",
+		description: siteConfig.description,
 		site: context.site ?? "https://fuwari.vercel.app",
 		items: blog.map((post) => {
 			const content =
@@ -30,7 +30,7 @@ export async function GET(context: APIContext) {
 			return {
 				title: post.data.title,
 				pubDate: post.data.published,
-				description: post.data.description || "",
+			description: post.data.description || post.data.title,
 				link: url(`/posts/${post.slug}/`),
 				content: sanitizeHtml(parser.render(cleanedContent), {
 					allowedTags: sanitizeHtml.defaults.allowedTags.concat(["img"]),

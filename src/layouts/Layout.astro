@@ -25,11 +25,12 @@ interface Props {
   title?: string;
   banner?: string;
   description?: string;
+  image?: string;
   lang?: string;
   setOGTypeArticle?: boolean;
 }
 
-let { title, banner, description, lang, setOGTypeArticle } = Astro.props;
+let { title, banner, description, image, lang, setOGTypeArticle } = Astro.props;
 
 // apply a class to the body element to decide the height of the banner, only used for initial page load
 // Swup can update the body for each page visit, but it's after the page transition, causing a delay for banner height change
@@ -62,6 +63,34 @@ if (!lang) {
   lang = `${siteConfig.lang}`;
 }
 const siteLang = lang.replace("_", "-");
+const siteUrl = Astro.site?.toString() ?? Astro.url.origin;
+const canonicalUrl = new URL(Astro.url.pathname, siteUrl).toString();
+const pageDescription = description?.trim() || siteConfig.description;
+const socialImage =
+  image && /^https?:\/\//i.test(image)
+    ? image
+    : new URL(url("/preview.png"), siteUrl).toString();
+const siteJsonLd = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Person",
+      "@id": new URL("#person", siteUrl).toString(),
+      name: profileConfig.name,
+      url: siteUrl,
+      sameAs: profileConfig.links.map((link) => link.url),
+    },
+    {
+      "@type": "WebSite",
+      "@id": new URL("#website", siteUrl).toString(),
+      url: siteUrl,
+      name: siteConfig.title,
+      description: siteConfig.description,
+      inLanguage: siteLang,
+      author: { "@id": new URL("#person", siteUrl).toString() },
+    },
+  ],
+};
 
 const bannerOffsetByPosition = {
   top: `${BANNER_HEIGHT_EXTEND}vh`,
@@ -82,13 +111,20 @@ const bannerOffset =
     <title>{pageTitle}</title>
 
     <meta charset="UTF-8" />
-    <meta name="description" content={description || pageTitle} />
+    <meta name="description" content={pageDescription} />
     <meta name="author" content={profileConfig.name} />
+    <meta
+      name="robots"
+      content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+    />
+    <link rel="canonical" href={canonicalUrl} />
 
     <meta property="og:site_name" content={siteConfig.title} />
-    <meta property="og:url" content={Astro.url} />
+    <meta property="og:url" content={canonicalUrl} />
     <meta property="og:title" content={pageTitle} />
-    <meta property="og:description" content={description || pageTitle} />
+    <meta property="og:description" content={pageDescription} />
+    <meta property="og:image" content={socialImage} />
+    <meta property="og:image:alt" content={`${pageTitle} 的分享预览`} />
     {
       setOGTypeArticle ? (
         <meta property="og:type" content="article" />
@@ -98,9 +134,11 @@ const bannerOffset =
     }
 
     <meta name="twitter:card" content="summary_large_image" />
-    <meta property="twitter:url" content={Astro.url} />
+    <meta name="twitter:url" content={canonicalUrl} />
     <meta name="twitter:title" content={pageTitle} />
-    <meta name="twitter:description" content={description || pageTitle} />
+    <meta name="twitter:description" content={pageDescription} />
+    <meta name="twitter:image" content={socialImage} />
+    <meta name="twitter:image:alt" content={`${pageTitle} 的分享预览`} />
 
     <meta name="viewport" content="width=device-width" />
     <meta name="generator" content={Astro.generator} />
@@ -166,6 +204,12 @@ const bannerOffset =
       }}
     ></style>
     <!-- defines global css variables. This will be applied to <html> <body> and some other elements idk why -->
+
+    <script
+      is:inline
+      type="application/ld+json"
+      set:html={JSON.stringify(siteJsonLd)}
+    />
 
     <slot name="head" />
 

@@ -1,7 +1,7 @@
 ---
 title: 闲适少绪
 published: 2022-09-15
-description: ''
+description: '一则描写午后树荫、云影与池畔景致的随笔。'
 image: 'https://picsum.photos/seed/543584684a854bda9fe8352497c4e91a/1920/1080'
 tags: ["随笔","生活"]
 category: '生活'

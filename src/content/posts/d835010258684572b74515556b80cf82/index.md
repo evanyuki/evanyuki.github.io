@@ -1,7 +1,7 @@
 ---
 title: 快捷瞬间操作指北
 published: 2025-11-10
-description: ''
+description: '用 iCloud 快捷指令记录并发布生活瞬间的实现步骤，包含链接配置和截图留档。'
 image: 'https://picsum.photos/seed/d835010258684572b74515556b80cf82/1920/1080'
 tags: [moment]
 category: '技术'

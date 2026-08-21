@@ -10,6 +10,8 @@ import { LinkPreset } from "./types/config";
 export const siteConfig: SiteConfig = {
 	title: "Evanyuki",
 	subtitle: "Soul Site",
+	description:
+		"Evanyuki 的个人博客，分享软件开发、开发者工具、区块链与产品思考。",
 	lang: "en", // Language code, e.g. 'en', 'zh_CN', 'ja', etc.
 	themeColor: {
 		hue: 265, // Default hue for the theme color, from 0 to 360. e.g. red: 0, teal: 200, cyan: 250, pink: 345

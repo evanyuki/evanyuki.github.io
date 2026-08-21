@@ -1,7 +1,7 @@
 ---
 title: ECMAScript 攻略
 published: 2022-09-16
-description: ''
+description: '整理 ECMAScript 常用新特性与实战示例，涵盖 Array.flat/flatMap、Object.fromEntries、Symbol 等 API。'
 image: 'https://picsum.photos/seed/3a9cea8df5b14702b262fd7ce3b36311/1920/1080'
 tags: ["es6"]
 category: '前端'

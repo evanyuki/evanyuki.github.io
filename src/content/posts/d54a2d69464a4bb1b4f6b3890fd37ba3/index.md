@@ -1,7 +1,7 @@
 ---
 title: 迁移日记
 published: 2025-11-07
-description: ''
+description: '将旧 GitHub Pages 博客迁移至 Astro 静态站点的记录，包含文章、图片和 Frontmatter 转换统计。'
 image: 'https://picsum.photos/seed/d54a2d69464a4bb1b4f6b3890fd37ba3/1920/1080'
 tags: [astro]
 category: '技术'

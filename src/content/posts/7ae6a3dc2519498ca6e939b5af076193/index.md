@@ -1,7 +1,7 @@
 ---
 title: LeetCode-821-字符的最短距离
 published: 2022-09-13
-description: ''
+description: 'LeetCode 821「字符的最短距离」题解：遍历目标字符位置计算最小距离，并给出 Python 实现与复杂度分析。'
 image: 'https://picsum.photos/seed/7ae6a3dc2519498ca6e939b5af076193/1920/1080'
 tags: ["leetcode","算法"]
 category: 'leetcode'

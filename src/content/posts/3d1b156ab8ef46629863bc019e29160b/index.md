@@ -1,7 +1,7 @@
 ---
 title: LeetCode-66 加一
 published: 2022-09-13
-description: ''
+description: 'LeetCode 66「加一」题解：分析数组进位处理，并给出 Python 实现与时间、空间复杂度说明。'
 image: 'https://picsum.photos/seed/3d1b156ab8ef46629863bc019e29160b/1920/1080'
 tags: ["leetcode","算法"]
 category: 'leetcode'

@@ -1,7 +1,7 @@
 ---
 title: SpaceID&Dotbit
 published: 2023-03-13
-description: ''
+description: '使用 @siddomains/sidjs 与 dotbit SDK，通过钱包地址反向查询 SpaceID 和 .bit 域名的实现示例。'
 image: 'https://picsum.photos/seed/2831a9a6cf814bee8fd043f3488e0d2f/1920/1080'
 tags: ["spaceid","区块链","dotbit","ens"]
 category: 'web3'

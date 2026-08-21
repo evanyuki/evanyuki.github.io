@@ -1,7 +1,7 @@
 ---
 title: 区块链合约小技巧
 published: 2022-10-17
-description: ''
+description: 'Solidity 合约开发技巧：通过结构体打包、view 函数与存储优化降低 Gas 消耗，并说明常用函数修饰符。'
 image: 'https://picsum.photos/seed/d45a6aa987204ad9a933e10250e33222/1920/1080'
 tags: ["区块链","solidity"]
 category: 'web3'

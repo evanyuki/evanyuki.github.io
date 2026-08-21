@@ -1,7 +1,7 @@
 ---
 title: 啊...
 published: 2025-11-06
-description: ''
+description: '在 Astro 博客文章中嵌入 YouTube 和 Bilibili 视频的测试记录与示例代码。'
 image: 'https://picsum.photos/seed/8da723e6bee14577a0cf78dabadb8ac8/1920/1080'
 tags: [video]
 category: '生活'
