@@ -8,261 +8,455 @@ interface Props {
 	headings: MarkdownHeading[];
 }
 
-let { headings = [] } = Astro.props;
-
-let minDepth = 10;
-for (const heading of headings) {
-	minDepth = Math.min(minDepth, heading.depth);
-}
-
+const { headings = [] } = Astro.props;
 const className = Astro.props.class;
 const isPostsRoute = Astro.url.pathname.startsWith(url("/posts/"));
 
-const removeTailingHash = (text: string) => {
-	let lastIndexOfHash = text.lastIndexOf("#");
-	if (lastIndexOfHash !== text.length - 1) {
-		return text;
+const minDepth = headings.reduce(
+	(depth, heading) => Math.min(depth, heading.depth),
+	Infinity,
+);
+const maxDepth = minDepth + siteConfig.toc.depth;
+const tocHeadings = headings.filter((heading) => heading.depth < maxDepth);
+
+const removeTrailingHash = (text: string) =>
+	text.endsWith("#") ? text.slice(0, -1) : text;
+---
+
+{isPostsRoute && tocHeadings.length > 0 &&
+	<table-of-contents class:list={[className, "toc-shell group/toc"]}>
+		<div class="toc-list-wrap">
+			<ul class="toc-list" aria-label="文章目录">
+				<span
+					data-toc-rail
+					aria-hidden="true"
+					class="toc-rail"
+					style="opacity: 0"
+				></span>
+				{tocHeadings.map((heading, index) => (
+					<li
+						data-toc-item
+						data-anchor-id={heading.slug}
+						class="toc-item"
+						style={`--toc-ripple-delay: ${index * 50}ms`}
+					>
+						<a
+							href={`#${heading.slug}`}
+							data-toc-entry
+							data-depth={heading.depth}
+							data-index={index}
+							title={removeTrailingHash(heading.text)}
+							style={`--toc-indent: ${14 + (heading.depth - minDepth) * 8.4}px`}
+							class="toc-entry text-50"
+						>
+							<span>{removeTrailingHash(heading.text)}</span>
+						</a>
+					</li>
+				))}
+			</ul>
+		</div>
+
+		<div class="toc-wave" aria-hidden="true">
+			<svg
+				viewBox="0 0 28 10"
+				fill="none"
+				preserveAspectRatio="none"
+			>
+				<path
+					d="M2 7 C4 2, 7 2, 9 5.5 C11 9, 14 9, 16 5 C18 1, 21 2, 24 6"
+					stroke="currentColor"
+					stroke-linecap="round"
+					stroke-width="1.2"
+					vector-effect="non-scaling-stroke"
+				></path>
+			</svg>
+		</div>
+
+		<div class="toc-reading text-50">
+			<div class="toc-progress-row">
+				<span class="toc-reading-icon toc-progress-icon" aria-hidden="true">
+					<svg viewBox="0 0 24 24">
+						<path d="M12 22q-2.05 0-3.875-.788t-3.187-2.15q-1.363-1.362-2.15-3.187T2 12q0-2.075.788-3.887t2.15-3.175Q6.3 3.575 8.124 2.788T12 2q.425 0 .713.288T13 3q0 .425-.288.713T12 4Q8.675 4 6.337 6.338T4 12q0 3.325 2.338 5.663T12 20q3.325 0 5.663-2.337T20 12q0-.425.288-.712T21 11q.425 0 .713.288T22 12q0 2.05-.788 3.875t-2.15 3.188q-1.362 1.362-3.175 2.15T12 22"></path>
+					</svg>
+				</span>
+				<span data-toc-progress>0%</span>
+			</div>
+		</div>
+	</table-of-contents>}
+
+<style>
+	.toc-shell {
+		display: block;
+		position: relative;
+		font-family: "Instrument Sans", MiSans, Roboto, system-ui, -apple-system,
+			"PingFang SC", "Microsoft YaHei", sans-serif;
+		font-size: 0.875rem;
+		font-weight: 400;
+		letter-spacing: 0.01em;
+		line-height: 1.5rem;
 	}
 
-	return text.substring(0, lastIndexOfHash);
-};
+	.toc-list-wrap {
+		min-height: 0;
+		padding-inline: 7px;
+	}
 
-let heading1Count = 1;
+	.toc-list {
+		position: relative;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+		scroll-behavior: smooth;
+	}
 
-const maxLevel = siteConfig.toc.depth;
----
-{isPostsRoute &&
-<table-of-contents class:list={[className, "group"]}>
-    {headings.filter((heading) => heading.depth < minDepth + maxLevel).map((heading) =>
-            <a href={`#${heading.slug}`} class="px-2 flex gap-2 relative transition w-full min-h-9 rounded-xl
-        hover:bg-[var(--toc-btn-hover)] active:bg-[var(--toc-btn-active)] py-2
-    ">
-                <div class:list={["transition w-5 h-5 shrink-0 rounded-lg text-xs flex items-center justify-center font-bold",
-                    {
-                        "bg-[var(--toc-badge-bg)] text-[var(--btn-content)]": heading.depth == minDepth,
-                        "ml-4": heading.depth == minDepth + 1,
-                        "ml-8": heading.depth == minDepth + 2,
-                    }
-                ]}
-                >
-                    {heading.depth == minDepth && heading1Count++}
-                    {heading.depth == minDepth + 1 && <div class="transition w-2 h-2 rounded-[0.1875rem] bg-[var(--toc-badge-bg)]"></div>}
-                    {heading.depth == minDepth + 2 && <div class="transition w-1.5 h-1.5 rounded-sm bg-black/5 dark:bg-white/10"></div>}
-                </div>
-                <div class:list={["transition text-sm", {
-                    "text-50": heading.depth == minDepth || heading.depth == minDepth + 1,
-                    "text-30": heading.depth == minDepth + 2,
-                }]}>{removeTailingHash(heading.text)}</div>
-            </a>
-    )}
-    <div id="active-indicator" style="opacity: 0" class:list={[{'hidden': headings.length == 0}, "-z-10 absolute bg-[var(--toc-btn-hover)] left-0 right-0 rounded-xl transition-all " +
-        "group-hover:bg-transparent border-2 border-[var(--toc-btn-hover)] group-hover:border-[var(--toc-btn-active)] border-dashed"]}></div>
-</table-of-contents>}
+	.toc-item {
+		position: relative;
+		height: 24.5px;
+		margin: 0;
+		padding: 0;
+		line-height: 0.875rem;
+	}
+
+	.toc-entry {
+		display: inline-block;
+		position: relative;
+		min-width: 0;
+		max-width: 100%;
+		height: 21px;
+		margin: 0 0 1.5px;
+		padding: 0 0 0 var(--toc-indent);
+		overflow: hidden;
+		font-size: 0.875rem;
+		font-variant-numeric: tabular-nums;
+		font-weight: 400;
+		line-height: 21px;
+		text-align: left;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		opacity: 0.35;
+		transition:
+			opacity 300ms ease-in-out,
+			color 300ms ease-in-out;
+	}
+
+	.toc-entry:hover,
+	.toc-entry:focus-visible {
+		opacity: 0.8;
+	}
+
+	.toc-entry:focus-visible {
+		outline: none;
+	}
+
+	.toc-entry.is-current {
+		color: var(--primary);
+		font-weight: 500;
+		opacity: 1;
+	}
+
+	.toc-rail {
+		position: absolute;
+		z-index: 1;
+		left: 0;
+		top: 0;
+		width: 2px;
+		border-radius: 2px;
+		background: linear-gradient(
+			to bottom,
+			var(--primary) 0%,
+			var(--primary) 80%,
+			transparent 100%
+		);
+		box-shadow:
+			0 0 6px color-mix(in srgb, var(--primary) 35%, transparent),
+			1px 0 12px color-mix(in srgb, var(--primary) 12%, transparent);
+		pointer-events: none;
+		transition:
+			top 400ms cubic-bezier(0.4, 0, 0.2, 1),
+			height 400ms cubic-bezier(0.4, 0, 0.2, 1),
+			opacity 200ms ease;
+	}
+
+	.toc-wave {
+		position: relative;
+		height: 2rem;
+		transition: opacity 300ms ease;
+	}
+
+	.toc-wave svg {
+		display: block;
+		position: absolute;
+		top: 50%;
+		width: 150px;
+		max-width: 100%;
+		height: 10px;
+		color: rgb(0 0 0 / 12%);
+		transform: translateY(-50%);
+	}
+
+	:global(.dark) .toc-wave svg {
+		color: rgb(255 255 255 / 12%);
+	}
+
+	.toc-reading {
+		width: fit-content;
+		padding-inline: 7px;
+	}
+
+	.toc-progress-row {
+		display: flex;
+		position: relative;
+		width: 100%;
+		min-height: 21px;
+		align-items: center;
+		padding-left: 1rem;
+		font-size: 0.875rem;
+		line-height: 21px;
+		white-space: nowrap;
+	}
+
+	.toc-reading-icon {
+		display: flex;
+		position: absolute;
+		left: 0;
+		top: 50%;
+		width: 1rem;
+		height: 1rem;
+		align-items: center;
+		justify-content: flex-start;
+		transform: translate(-0.5rem, -50%);
+	}
+
+	.toc-reading-icon svg {
+		display: block;
+		width: 1rem;
+		height: 1rem;
+	}
+
+	.toc-progress-icon {
+		color: var(--primary);
+	}
+
+	.toc-progress-icon path {
+		fill: currentColor;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.toc-entry,
+		.toc-rail,
+		.toc-wave {
+			transition: none;
+		}
+	}
+</style>
 
 <script>
-class TableOfContents extends HTMLElement {
-    tocEl: HTMLElement | null = null;
-    visibleClass = "visible";
-    observer: IntersectionObserver;
-    anchorNavTarget: HTMLElement | null = null;
-    headingIdxMap = new Map<string, number>();
-    headings: HTMLElement[] = [];
-    sections: HTMLElement[] = [];
-    tocEntries: HTMLAnchorElement[] = [];
-    active: boolean[] = [];
-    activeIndicator: HTMLElement | null = null;
+	type TocItem = {
+		entry: HTMLAnchorElement;
+		heading: HTMLElement;
+		section: HTMLElement;
+		depth: number;
+	};
 
-    constructor() {
-        super();
-        this.observer = new IntersectionObserver(
-            this.markVisibleSection, { threshold: 0 }
-        );
-    };
+	type VisibleRange = {
+		first: number;
+		last: number;
+	};
 
-    markVisibleSection = (entries: IntersectionObserverEntry[]) => {
-        entries.forEach((entry) => {
-            const id = entry.target.children[0]?.getAttribute("id");
-            const idx = id ? this.headingIdxMap.get(id) : undefined;
-            if (idx != undefined)
-                this.active[idx] = entry.isIntersecting;
+	class TableOfContents extends HTMLElement {
+		items: TocItem[] = [];
+		rail: HTMLElement | null = null;
+		progress: HTMLElement | null = null;
+		tocScroller: HTMLElement | null = null;
+		resizeObserver: ResizeObserver | null = null;
+		animationFrame = 0;
+		skipAutoScrollUntil = 0;
 
-            if (entry.isIntersecting && this.anchorNavTarget == entry.target.firstChild)
-                this.anchorNavTarget = null;
-        });
+		connectedCallback() {
+			requestAnimationFrame(() => this.init());
+		}
 
-        if (!this.active.includes(true))
-            this.fallback();
-        this.update();
-    };
+		disconnectedCallback() {
+			this.destroy();
+		}
 
-    toggleActiveHeading = () => {
-        let i = this.active.length - 1;
-        let min = this.active.length - 1, max = -1;
-        while (i >= 0 && !this.active[i]) {
-            this.tocEntries[i].classList.remove(this.visibleClass);
-            i--;
-        }
-        while (i >= 0 && this.active[i]) {
-            this.tocEntries[i].classList.add(this.visibleClass);
-            min = Math.min(min, i);
-            max = Math.max(max, i);
-            i--;
-        }
-        while (i >= 0) {
-            this.tocEntries[i].classList.remove(this.visibleClass);
-            i--;
-        }
-        if (min > max) {
-            this.activeIndicator?.setAttribute("style", `opacity: 0`);
-        } else {
-            let parentOffset = this.tocEl?.getBoundingClientRect().top || 0;
-            let scrollOffset = this.tocEl?.scrollTop || 0;
-            let top = this.tocEntries[min].getBoundingClientRect().top - parentOffset + scrollOffset;
-            let bottom = this.tocEntries[max].getBoundingClientRect().bottom - parentOffset + scrollOffset;
-            this.activeIndicator?.setAttribute("style", `top: ${top}px; height: ${bottom - top}px`);
-        }
-    };
+		init() {
+			this.destroy();
+			this.rail = this.querySelector<HTMLElement>("[data-toc-rail]");
+			this.progress = this.querySelector<HTMLElement>("[data-toc-progress]");
+			this.tocScroller = document.getElementById("toc-inner-wrapper");
 
-    scrollToActiveHeading = () => {
-        // If the TOC widget can accommodate both the topmost
-        // and bottommost items, scroll to the topmost item. 
-        // Otherwise, scroll to the bottommost one.
+			this.items = Array.from(
+				this.querySelectorAll<HTMLAnchorElement>("[data-toc-entry]"),
+			).flatMap((entry) => {
+				const id = decodeURIComponent(entry.hash.slice(1));
+				const heading = document.getElementById(id);
+				const depth = Number(entry.dataset.depth);
 
-        if (this.anchorNavTarget || !this.tocEl) return;
-        const activeHeading =
-            document.querySelectorAll<HTMLDivElement>(`#toc .${this.visibleClass}`);
-        if (!activeHeading.length) return;
+				if (!(heading instanceof HTMLElement) || Number.isNaN(depth)) {
+					return [];
+				}
 
-        const topmost = activeHeading[0];
-        const bottommost = activeHeading[activeHeading.length - 1];
-        const tocHeight = this.tocEl.clientHeight;
+				const section = heading.closest("section") ?? heading.parentElement ?? heading;
+				return [{ entry, heading, section, depth }];
+			});
 
-        let top;
-        if (bottommost.getBoundingClientRect().bottom -
-            topmost.getBoundingClientRect().top < 0.9 * tocHeight)
-            top = topmost.offsetTop - 32;
-        else
-            top = bottommost.offsetTop - tocHeight * 0.8;
+			if (!this.items.length || !this.rail) return;
 
-        this.tocEl.scrollTo({
-            top,
-            left: 0,
-            behavior: "smooth",
-        });
-    };
+			window.addEventListener("scroll", this.scheduleUpdate, { passive: true });
+			window.addEventListener("resize", this.scheduleUpdate, { passive: true });
+			window.addEventListener("hashchange", this.scheduleUpdate);
+			this.addEventListener("click", this.handleClick);
 
-    update = () => {
-        requestAnimationFrame(() => {
-            this.toggleActiveHeading();
-            // requestAnimationFrame(() => {
-            this.scrollToActiveHeading();
-            // });
-        });
-    };
+			this.resizeObserver = new ResizeObserver(this.scheduleUpdate);
+			this.resizeObserver.observe(this);
+			this.resizeObserver.observe(document.documentElement);
+			this.scheduleUpdate();
+		}
 
-    fallback = () => {
-        if (!this.sections.length) return;
+		destroy() {
+			cancelAnimationFrame(this.animationFrame);
+			window.removeEventListener("scroll", this.scheduleUpdate);
+			window.removeEventListener("resize", this.scheduleUpdate);
+			window.removeEventListener("hashchange", this.scheduleUpdate);
+			this.removeEventListener("click", this.handleClick);
+			this.resizeObserver?.disconnect();
+			this.resizeObserver = null;
+			this.tocScroller = null;
+		}
 
-        for (let i = 0; i < this.sections.length; i++) {
-            let offsetTop = this.sections[i].getBoundingClientRect().top;
-            let offsetBottom = this.sections[i].getBoundingClientRect().bottom;
+		handleClick = (event: Event) => {
+			const anchor = event
+				.composedPath()
+				.find((element) => element instanceof HTMLAnchorElement);
 
-            if (this.isInRange(offsetTop, 0, window.innerHeight)
-                || this.isInRange(offsetBottom, 0, window.innerHeight)
-                || (offsetTop < 0 && offsetBottom > window.innerHeight)) {                    
-                this.markActiveHeading(i);
-            }
-            else if (offsetTop > window.innerHeight) break;
-        }
-    };
+			if (anchor) {
+				this.skipAutoScrollUntil = performance.now() + 700;
+				window.setTimeout(this.scheduleUpdate, 0);
+			}
+		};
 
-    markActiveHeading = (idx: number)=> {
-        this.active[idx] = true;
-    };
+		scheduleUpdate = () => {
+			cancelAnimationFrame(this.animationFrame);
+			this.animationFrame = requestAnimationFrame(this.update);
+		};
 
-    handleAnchorClick = (event: Event) => {
-        const anchor = event
-            .composedPath()
-            .find((element) => element instanceof HTMLAnchorElement);
+		getVisibleRange(): VisibleRange {
+			const visible: number[] = [];
+			const viewportTop = 0;
+			const viewportBottom = window.innerHeight;
 
-        if (anchor) {
-            const id = decodeURIComponent(anchor.hash?.substring(1));
-            const idx = this.headingIdxMap.get(id);
-            if (idx !== undefined) {
-                this.anchorNavTarget = this.headings[idx];
-            } else {
-                this.anchorNavTarget = null;
-            }
-        }
-    };
+			this.items.forEach((item, index) => {
+				const bounds = item.section.getBoundingClientRect();
+				if (bounds.bottom > viewportTop && bounds.top < viewportBottom) {
+					visible.push(index);
+				}
+			});
 
-    isInRange(value: number, min: number, max: number) {
-        return min < value && value < max;
-    };
+			if (visible.length > 0) {
+				return { first: visible[0], last: visible[visible.length - 1] };
+			}
 
-    connectedCallback() {
-        // wait for the onload animation to finish, which makes the `getBoundingClientRect` return correct values
-        const element = document.querySelector('.prose');
-        if (element) {
-            element.addEventListener('animationend', () => {
-                this.init();
-            }, { once: true });
-        } else {
-            console.debug('Animation element not found');
-        }
-    };
+			const readingLine = Math.min(window.innerHeight * 0.32, 180);
+			let current = 0;
+			for (let index = 0; index < this.items.length; index++) {
+				if (this.items[index].heading.getBoundingClientRect().top <= readingLine) {
+					current = index;
+				} else {
+					break;
+				}
+			}
 
-    init() {
-        this.tocEl = document.getElementById(
-            "toc-inner-wrapper"
-        );
+			return { first: current, last: current };
+		}
 
-        if (!this.tocEl) return;
+		updateRail(range: VisibleRange) {
+			if (!this.rail) return;
 
-        this.tocEl.addEventListener("click", this.handleAnchorClick, {
-            capture: true,
-        });
+			this.items.forEach((item, index) => {
+				const isCurrent = index === range.first;
+				item.entry.classList.toggle("is-current", isCurrent);
+				if (isCurrent) item.entry.setAttribute("aria-current", "location");
+				else item.entry.removeAttribute("aria-current");
+			});
 
-        this.activeIndicator = document.getElementById("active-indicator");
+			const firstItem = this.items[range.first].entry.parentElement;
+			const lastItem = this.items[range.last].entry.parentElement;
+			if (!(firstItem instanceof HTMLElement) || !(lastItem instanceof HTMLElement)) {
+				this.rail.style.opacity = "0";
+				return;
+			}
 
-        this.tocEntries = Array.from(
-            document.querySelectorAll<HTMLAnchorElement>("#toc a[href^='#']")
-        );
+			const list = firstItem.parentElement;
+			if (!(list instanceof HTMLElement)) return;
+			const listBounds = list.getBoundingClientRect();
+			const firstBounds = firstItem.getBoundingClientRect();
+			const lastBounds = lastItem.getBoundingClientRect();
+			const top = firstBounds.top - listBounds.top + list.scrollTop;
+			const height = lastBounds.bottom - firstBounds.top;
+			this.rail.style.top = `${top}px`;
+			this.rail.style.height = `${height}px`;
+			this.rail.style.opacity = "1";
+		}
 
-        if (this.tocEntries.length === 0) return;
+		updateProgress() {
+			const article = document.querySelector<HTMLElement>(".prose");
+			const articleTop = article
+				? article.getBoundingClientRect().top + window.scrollY
+				: 0;
+			const articleBottom = article
+				? articleTop + article.scrollHeight
+				: document.documentElement.scrollHeight;
+			const start = Math.max(0, articleTop - window.innerHeight * 0.2);
+			const end = Math.max(start + 1, articleBottom - window.innerHeight * 0.55);
+			const ratio = Math.min(1, Math.max(0, (window.scrollY - start) / (end - start)));
+			const percentage = Math.round(ratio * 100);
 
-        this.sections = new Array(this.tocEntries.length);
-        this.headings = new Array(this.tocEntries.length);
-        for (let i = 0; i < this.tocEntries.length; i++) {
-            const id = decodeURIComponent(this.tocEntries[i].hash?.substring(1));
-            const heading = document.getElementById(id);
-            const section = heading?.parentElement;
-            if (heading instanceof HTMLElement && section instanceof HTMLElement) {
-                this.headings[i] = heading;
-                this.sections[i] = section;
-                this.headingIdxMap.set(id, i);
-            }
-        }
-        this.active = new Array(this.tocEntries.length).fill(false);
+			if (this.progress) this.progress.textContent = `${percentage}%`;
+		}
 
-        this.sections.forEach((section) =>
-            this.observer.observe(section)
-        );
+		scrollRangeIntoView(range: VisibleRange) {
+			if (
+				!this.tocScroller ||
+				performance.now() < this.skipAutoScrollUntil
+			) {
+				return;
+			}
 
-        this.fallback();
-        this.update();
-    };
+			const first = this.items[range.first].entry;
+			const last = this.items[range.last].entry;
+			const scrollerBounds = this.tocScroller.getBoundingClientRect();
+			const firstBounds = first.getBoundingClientRect();
+			const lastBounds = last.getBoundingClientRect();
+			const padding = 32;
 
-    disconnectedCallback() {
-        this.sections.forEach((section) =>
-            this.observer.unobserve(section)
-        );
-        this.observer.disconnect();
-        this.tocEl?.removeEventListener("click", this.handleAnchorClick);
-    };
-}
+			if (
+				firstBounds.top >= scrollerBounds.top + padding &&
+				lastBounds.bottom <= scrollerBounds.bottom - padding
+			) {
+				return;
+			}
 
-if (!customElements.get("table-of-contents")) {
-    customElements.define("table-of-contents", TableOfContents);
-}
+			this.tocScroller.scrollTo({
+				top:
+					this.tocScroller.scrollTop +
+					firstBounds.top -
+					scrollerBounds.top -
+					padding,
+				behavior: "smooth",
+			});
+		}
+
+		update = () => {
+			if (!this.items.length || !this.rail) return;
+			const range = this.getVisibleRange();
+			this.updateRail(range);
+			this.updateProgress();
+			this.scrollRangeIntoView(range);
+		};
+	}
+
+	if (!customElements.get("table-of-contents")) {
+		customElements.define("table-of-contents", TableOfContents);
+	}
 </script>
