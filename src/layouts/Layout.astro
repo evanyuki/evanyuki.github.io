@@ -333,7 +333,10 @@ const bannerOffset =
     MAIN_PANEL_OVERLAPS_BANNER_HEIGHT,
   } from "../constants/constants";
   import { commentConfig, siteConfig } from "../config";
-  import { initFriendLinks } from "../scripts/friend-links";
+  import {
+    initFriendLinkApplication,
+    initFriendLinks,
+  } from "../scripts/friend-links";
   import { init as initWaline } from "@waline/client";
 
   const bannerEnabled = !!document.getElementById("banner-wrapper");
@@ -474,6 +477,7 @@ const bannerOffset =
     showBanner();
     initWalineComment();
     initFriendLinks();
+    initFriendLinkApplication();
   }
 
   /* Load settings when entering the site */
@@ -504,6 +508,7 @@ const bannerOffset =
     window.swup.hooks.on("page:view", () => {
       initWalineComment();
       initFriendLinks();
+      initFriendLinkApplication();
     });
     window.swup.hooks.on("visit:start", (visit: { to: { url: string } }) => {
       // change banner height immediately when a link is clicked

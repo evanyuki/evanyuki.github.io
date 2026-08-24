@@ -249,3 +249,125 @@ export function initFriendLinks(): void {
 	window.addEventListener("friend-links:refresh", scheduleRefresh);
 	void refresh();
 }
+
+function applicationText(value: FormDataEntryValue | null, maxLength: number): string {
+	return typeof value === "string"
+		? value.replace(/\s+/g, " ").trim().slice(0, maxLength)
+		: "";
+}
+
+export function initFriendLinkApplication(): void {
+	const root = document.getElementById("friend-links");
+	const form = root?.querySelector<HTMLFormElement>(
+		"[data-friend-link-application-form]",
+	);
+	if (!root || !form || form.dataset.initialized === "true") return;
+
+	form.dataset.initialized = "true";
+	const typeInput = form.querySelector<HTMLInputElement>(
+		"[data-friend-link-application-type]",
+	);
+	const typeButtons = form.querySelectorAll<HTMLButtonElement>(
+		"[data-friend-link-application-kind]",
+	);
+	const submitButton = form.querySelector<HTMLButtonElement>(
+		"[data-friend-link-application-submit]",
+	);
+	const status = form.querySelector<HTMLElement>(
+		"[data-friend-link-application-status]",
+	);
+	const serverURL = root.dataset.commentServer;
+	const path = root.dataset.commentPath;
+	if (!typeInput || !submitButton || !status || !serverURL || !path) return;
+
+	const setApplicationType = (type: "new" | "update") => {
+		typeInput.value = type;
+		for (const button of typeButtons) {
+			const active = button.dataset.friendLinkApplicationKind === type;
+			button.ariaPressed = String(active);
+			button.classList.toggle("bg-[var(--primary)]", active);
+			button.classList.toggle("text-white", active);
+			button.classList.toggle("border-[var(--primary)]", active);
+			button.classList.toggle("text-50", !active);
+			button.classList.toggle("border-[var(--line-divider)]", !active);
+		}
+	};
+
+	for (const button of typeButtons) {
+		button.addEventListener("click", () => {
+			setApplicationType(
+				button.dataset.friendLinkApplicationKind === "update" ? "update" : "new",
+			);
+		});
+	}
+
+	form.addEventListener("submit", async (event) => {
+		event.preventDefault();
+		if (!form.reportValidity()) return;
+
+		const fields = new FormData(form);
+		const name = applicationText(fields.get("name"), 80);
+		const desc = applicationText(fields.get("description"), 240);
+		const mail = applicationText(fields.get("email"), 254);
+		const link = getHttpUrl(applicationText(fields.get("link"), 2048));
+		const avatar = getHttpUrl(applicationText(fields.get("avatar"), 2048));
+		const screenshot = getHttpUrl(applicationText(fields.get("screenshot"), 2048));
+		const rss = getHttpUrl(applicationText(fields.get("rss"), 2048));
+
+		if (!name || !desc || !mail || !link || !avatar) {
+			status.textContent = "请填写完整的名称、链接、Logo、简介与邮箱。";
+			return;
+		}
+
+		const applicationType = typeInput.value === "update" ? "update" : "new";
+		const comment = [
+			"<!-- friend-link-application -->",
+			`application: ${applicationType}`,
+			`name: ${name}`,
+			`link: ${link}`,
+			`desc: ${desc}`,
+			`avatar: ${avatar}`,
+			screenshot ? `screenshot: ${screenshot}` : "",
+			rss ? `rss: ${rss}` : "",
+		]
+			.filter(Boolean)
+			.join("\n");
+
+		submitButton.disabled = true;
+		status.textContent = "正在提交申请…";
+
+		try {
+			const endpoint = new URL(
+				"api/comment?lang=zh-CN",
+				`${serverURL.replace(/\/$/, "")}/`,
+			);
+			const response = await fetch(endpoint, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					nick: name,
+					mail,
+					link,
+					comment,
+					ua: navigator.userAgent,
+					url: path,
+				}),
+			});
+			const payload = (await response.json().catch(() => null)) as
+				| { errno?: number; errmsg?: string }
+				| null;
+			if (!response.ok || payload?.errno)
+				throw new Error(payload?.errmsg || "提交失败");
+
+			form.reset();
+			setApplicationType("new");
+			status.textContent = "申请已提交，审核通过后会展示在友链列表中。";
+			window.dispatchEvent(new Event("friend-links:refresh"));
+		} catch (error) {
+			status.textContent =
+				error instanceof Error ? `提交失败：${error.message}` : "提交失败，请稍后重试。";
+		} finally {
+			submitButton.disabled = false;
+		}
+	});
+}
