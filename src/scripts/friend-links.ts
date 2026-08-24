@@ -374,7 +374,7 @@ export function initFriendLinkApplication(): void {
 
 			form.reset();
 			setApplicationType("new");
-			status.textContent = "申请已提交，审核通过后会展示在友链列表中。";
+			status.textContent = "申请已提交，会自动展示在友链列表中。";
 			window.dispatchEvent(new Event("friend-links:refresh"));
 		} catch (error) {
 			status.textContent =

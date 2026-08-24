@@ -24,4 +24,4 @@ assert.ok(page.includes("data-friend-link-application-dialog"));
 assert.ok(page.includes('id="friend-link-comment"'));
 assert.ok(page.includes('<div id="waline"></div>'));
 assert.ok(script.includes('"api/comment?lang=zh-CN"'));
-assert.ok(script.includes('"申请已提交，审核通过后会展示在友链列表中。"'));
+assert.ok(script.includes('"申请已提交，会自动展示在友链列表中。"'));
