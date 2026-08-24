@@ -332,7 +332,8 @@ const bannerOffset =
     BANNER_HEIGHT_EXTEND,
     MAIN_PANEL_OVERLAPS_BANNER_HEIGHT,
   } from "../constants/constants";
-  import { siteConfig } from "../config";
+  import { commentConfig, siteConfig } from "../config";
+  import { initFriendLinks } from "../scripts/friend-links";
   import { init as initWaline } from "@waline/client";
 
   const bannerEnabled = !!document.getElementById("banner-wrapper");
@@ -460,7 +461,7 @@ const bannerOffset =
     if (walineContainer) {
       initWaline({
         el: "#waline",
-        serverURL: "https://blog-common.vercel.app",
+        serverURL: commentConfig.serverURL,
         dark: "html.dark",
       });
     }
@@ -472,6 +473,7 @@ const bannerOffset =
     initCustomScrollbar();
     showBanner();
     initWalineComment();
+    initFriendLinks();
   }
 
   /* Load settings when entering the site */
@@ -499,7 +501,10 @@ const bannerOffset =
       }
     });
     window.swup.hooks.on("content:replace", initCustomScrollbar);
-    window.swup.hooks.on("page:view", initWalineComment);
+    window.swup.hooks.on("page:view", () => {
+      initWalineComment();
+      initFriendLinks();
+    });
     window.swup.hooks.on("visit:start", (visit: { to: { url: string } }) => {
       // change banner height immediately when a link is clicked
       const bodyElement = document.querySelector("body");

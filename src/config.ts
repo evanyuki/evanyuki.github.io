@@ -46,12 +46,17 @@ export const navBarConfig: NavBarConfig = {
 		LinkPreset.Home,
 		LinkPreset.Archive,
 		LinkPreset.About,
+		{ name: "Friends", url: "/links/" },
 		LinkPreset.Moment,
 	],
 };
 
+export const commentConfig = {
+	serverURL: "https://blog-common.vercel.app",
+};
+
 export const profileConfig: ProfileConfig = {
-	avatar: "assets/images/122820255.png", // Relative to the /src directory. Relative to the /public directory if it starts with '/'
+	avatar: "assets/images/c66da2.png", // Relative to the /src directory. Relative to the /public directory if it starts with '/'
 	name: "Evanyuki",
 	bio: "自分の生活に忠実である",
 	links: [

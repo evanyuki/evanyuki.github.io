@@ -1,0 +1,39 @@
+---
+import { Icon } from "astro-icon/components";
+import type { FriendLink } from "@/data/friend-links";
+
+interface Props {
+	friend: FriendLink;
+	source?: "manual" | "comment";
+}
+
+const { friend, source = "manual" } = Astro.props;
+---
+
+<a
+	class="card-base group relative flex h-28 items-center gap-3 overflow-hidden rounded-[var(--radius-large)] border border-transparent p-4 transition duration-300 hover:-translate-y-0.5 hover:border-[var(--line-divider)] hover:shadow-md"
+	href={friend.link}
+	target="_blank"
+	rel="noopener noreferrer"
+	data-friend-link-source={source}
+>
+	<img
+		class="h-14 w-14 shrink-0 rounded-xl object-cover ring-1 ring-[var(--line-divider)] transition duration-300 group-hover:scale-105"
+		src={friend.avatar}
+		alt={`${friend.name} 的头像`}
+		loading="lazy"
+		referrerpolicy="no-referrer"
+	/>
+	<div class="min-w-0 flex-1">
+		<div class="mb-1 flex items-center gap-2">
+			<h2 class="truncate font-bold text-[var(--primary)]">
+				{friend.name}
+			</h2>
+		</div>
+		<p class="line-clamp-2 text-sm leading-5 text-50">{friend.desc}</p>
+	</div>
+	<Icon
+		name="fa6-solid:arrow-up-right-from-square"
+		class="absolute right-3 top-3 text-xs text-50 opacity-0 transition group-hover:opacity-100"
+	/>
+</a>
