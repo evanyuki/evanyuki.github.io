@@ -261,7 +261,10 @@ export function initFriendLinkApplication(): void {
 	const form = root?.querySelector<HTMLFormElement>(
 		"[data-friend-link-application-form]",
 	);
-	if (!root || !form || form.dataset.initialized === "true") return;
+	const dialog = root?.querySelector<HTMLDialogElement>(
+		"[data-friend-link-application-dialog]",
+	);
+	if (!root || !form || !dialog || form.dataset.initialized === "true") return;
 
 	form.dataset.initialized = "true";
 	const typeInput = form.querySelector<HTMLInputElement>(
@@ -279,6 +282,16 @@ export function initFriendLinkApplication(): void {
 	const serverURL = root.dataset.commentServer;
 	const path = root.dataset.commentPath;
 	if (!typeInput || !submitButton || !status || !serverURL || !path) return;
+
+	root
+		.querySelectorAll<HTMLButtonElement>("[data-friend-link-application-open]")
+		.forEach((button) => button.addEventListener("click", () => dialog.showModal()));
+	root
+		.querySelector<HTMLButtonElement>("[data-friend-link-application-close]")
+		?.addEventListener("click", () => dialog.close());
+	dialog.addEventListener("click", (event) => {
+		if (event.target === dialog) dialog.close();
+	});
 
 	const setApplicationType = (type: "new" | "update") => {
 		typeInput.value = type;
