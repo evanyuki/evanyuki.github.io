@@ -13,11 +13,42 @@ export interface FriendLink {
  */
 export const manualFriendLinks: FriendLink[] = [
 	{
+		name: "安知鱼",
+		link: "https://blog.anheyu.com",
+		desc: "生活明朗，万物可爱",
+		avatar: "https://npm.elemecdn.com/anzhiyu-blog-static@1.0.4/img/avatar.jpg",
+	},
+	{
 		name: "RisingIce",
 		link: "https://www.imrising.cn",
 		desc: "自由摇曳 生生不息",
 		avatar: "https://www.imrising.cn/images/avatar.png",
 	},
+	{
+		name: "Kegongteng",
+		link: "https://kegongteng.cn",
+		desc: "Blogger / Technophile / Student",
+		avatar: "https://kegongteng.cn/favicon.ico",
+	},
+	{
+		name: "Echo",
+		link: "https://www.liveout.cn",
+		desc: "Life is code. I will debug it.",
+		avatar: "https://liveout.cn/usr/uploads/pic/icon1.jpg",
+	},
+	{
+		name: "朝瓜夕拾",
+		link: "https://yuubari.cn",
+		desc: "瓜瓜和果果的Blog",
+		avatar: "https://yuubari.cn/upload/3628985i.png",
+	},
+	{
+		name: "朽丘秋雨",
+		link: "https://koxiuqiu.cn",
+		desc: "一定会和喜欢的人在夏日夜晚牵手慢步",
+		avatar: "https://koxiuqiu.cn/aicon.png",
+	},
+
 	{
 		name: "Elykia",
 		link: "https://blog.elykia.cn",
