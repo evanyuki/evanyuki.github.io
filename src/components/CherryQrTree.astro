@@ -1,0 +1,887 @@
+<button
+	id="cherry-qr-tree"
+	type="button"
+	hidden
+	aria-label="将樱花树展开为本站二维码"
+	aria-pressed="false"
+	data-qr-target="https://evanyuki.github.io/"
+	title="点击查看本站二维码"
+>
+	<canvas aria-hidden="true"></canvas>
+</button>
+
+<style is:global>
+	#cherry-qr-tree {
+		position: fixed;
+		bottom: 0.5rem;
+	right: max(0.5rem, calc((100vw - 75rem) / 2 - 13rem));
+		z-index: 35;
+		display: none;
+		width: 13rem;
+		height: 18rem;
+		padding: 0;
+		border: 0;
+		background: transparent;
+		cursor: pointer;
+		isolation: isolate;
+		touch-action: manipulation;
+	}
+
+	@media (min-width: 1280px) {
+		body.lg\:is-home #cherry-qr-tree:not([hidden]) {
+			display: block;
+		}
+	}
+
+	#cherry-qr-tree canvas {
+		display: block;
+		width: 100%;
+		height: 100%;
+		filter: drop-shadow(0 0.8rem 1rem rgb(70 38 62 / 0.12));
+	}
+
+	#cherry-qr-tree:focus-visible {
+		outline: 2px solid var(--primary);
+		outline-offset: 0.25rem;
+		border-radius: 1rem;
+	}
+</style>
+
+<script>
+	const QR = [
+		"11111110010100011011101111111",
+		"10000010011100000110101000001",
+		"10111010111010101010101011101",
+		"10111010111100001110101011101",
+		"10111010101111110111101011101",
+		"10000010110101111100001000001",
+		"11111110101010101010101111111",
+		"00000000101111010010000000000",
+		"10111110011100110101001111100",
+		"10011100001100011111101110001",
+		"01110011101110000010011000000",
+		"01100101111000101000100101010",
+		"11000010001110001100100001100",
+		"00110100110001110111101110001",
+		"01000011001101111100100111100",
+		"10000001110001010000000010010",
+		"10101111010000110111000001100",
+		"10000101101110011111111110101",
+		"10111011011110000100111000100",
+		"10110100000100101001101110010",
+		"10110011001010001010111110111",
+		"00000000111011110110100011111",
+		"11111110010001111101101011100",
+		"10000010110111010111100010001",
+		"10111010100000110000111110111",
+		"10111010101011011010100101100",
+		"10111010100101100011111111110",
+		"10000010010010001000111111010",
+		"11111110100010101010000110100",
+	];
+
+	type SceneController = { start: () => void; stop: () => void };
+	type Block = { col: number; row: number; layer: number; type: number };
+	type Segment = {
+		start: [number, number, number];
+		end: [number, number, number];
+		startRadius: number;
+		endRadius: number;
+	};
+	type Tip = { x: number; y: number; z: number; radius: number };
+	type Metrics = {
+		density: number;
+		edgeRatio: number;
+		trunkHeight: number;
+		trunkRadius: number;
+		trunkLean: number;
+		mainBranches: number;
+		branchLengthScale: number;
+		maxDepth: number;
+		canopyDensity: number;
+	};
+
+	const host = document.querySelector<HTMLButtonElement>("#cherry-qr-tree");
+	const desktop = window.matchMedia("(min-width: 1280px)");
+	const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+	let controller: SceneController | undefined;
+
+	const shouldShow = () =>
+		desktop.matches && document.body.classList.contains("lg:is-home");
+
+	async function createScene() {
+		if (!host || host.dataset.ready) return;
+		host.dataset.ready = "loading";
+
+		try {
+			const THREE = await import("three");
+			if (!host.isConnected) return;
+
+			const canvas = host.querySelector("canvas");
+			if (!(canvas instanceof HTMLCanvasElement)) return;
+			if (QR.length !== 29 || QR.some((row) => row.length !== QR.length)) {
+				throw new Error("Invalid QR matrix");
+			}
+
+			const renderer = new THREE.WebGLRenderer({
+				alpha: true,
+				antialias: true,
+				canvas,
+				powerPreference: "high-performance",
+			});
+			renderer.setClearColor(0x000000, 0);
+			renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+			renderer.outputColorSpace = THREE.SRGBColorSpace;
+			renderer.toneMapping = THREE.ACESFilmicToneMapping;
+			renderer.toneMappingExposure = 1.7;
+
+			const scene = new THREE.Scene();
+			const camera = new THREE.OrthographicCamera(-4, 4, 4, -4, 0.1, 40);
+			const world = new THREE.Group();
+			scene.add(world);
+			scene.add(new THREE.AmbientLight(0xfffaf7, 1.2));
+			const sun = new THREE.DirectionalLight(0xfff1e6, 1.35);
+			sun.position.set(-5, 9, -6);
+			scene.add(sun);
+			scene.add(new THREE.HemisphereLight(0xf7f3ff, 0x88a85c, 0.48));
+
+			const BLOCK = 4.75 / QR.length;
+			const SOURCE_BLOCK = 0.0245;
+			const SOURCE_SCALE = BLOCK / SOURCE_BLOCK;
+			const GRID_CENTRE = QR.length / 2;
+			const CANOPY_RATIO = 0.46;
+			const random = (x: number, y = 0, seed = 0) => {
+				const value = Math.sin(x * 127.1 + y * 311.7 + seed * 43.7) * 43758.5;
+				return value - Math.floor(value);
+			};
+			let treeSeed = 0;
+			for (const character of host.dataset.qrTarget ?? "") {
+				treeSeed = (Math.imul(31, treeSeed) + character.charCodeAt(0)) | 0;
+			}
+			treeSeed = (Math.abs(treeSeed) % 99991) + 1;
+			const treeRandom = (x: number, y = 0, seed = 0) => {
+				const value = Math.sin(x * 127.1 + y * 311.7 + seed * 43.7 + 7919 * treeSeed) * 43758.5;
+				return value - Math.floor(value);
+			};
+
+			let darkCount = 0;
+			let edgeCount = 0;
+			for (let row = 0; row < QR.length; row++) {
+				for (let col = 0; col < QR.length; col++) {
+					const dark = QR[row][col] === "1";
+					if (dark) darkCount++;
+					if (col > 0 && dark !== (QR[row][col - 1] === "1")) edgeCount++;
+					if (row > 0 && dark !== (QR[row - 1][col] === "1")) edgeCount++;
+				}
+			}
+			const density = darkCount / (QR.length * QR.length);
+			const edgeRatio = edgeCount / (2 * QR.length * (QR.length - 1));
+			const gridScale = QR.length / 29;
+			const metrics: Metrics = {
+				density,
+				edgeRatio,
+				trunkHeight: (0.26 + 0.08 * density) * gridScale,
+				trunkRadius: (0.024 + 0.008 * density) * gridScale,
+				trunkLean: (0.04 + 0.03 * random(density, edgeRatio)) * gridScale,
+				mainBranches: 4 + Math.floor(4 * density),
+				branchLengthScale: 0.55 + 0.25 * density,
+				maxDepth: edgeRatio > 0.28 ? 5 : 4,
+				canopyDensity: 0.5 + 0.5 * density,
+			};
+
+			const blocks: Block[] = [];
+			const grassCells: [number, number][] = [];
+			const canopyRadius = QR.length * CANOPY_RATIO;
+			const canopyRadiusSq = canopyRadius * canopyRadius;
+			for (let row = 0; row < QR.length; row++) {
+				for (let col = 0; col < QR.length; col++) {
+					const dark = QR[row][col] === "1";
+					const distanceSq = (col - GRID_CENTRE) ** 2 + (row - GRID_CENTRE) ** 2;
+					const type = !dark ? 0 : distanceSq >= canopyRadiusSq ? 3 : 4;
+					blocks.push({ col, row, layer: 0, type });
+					if (type === 3) grassCells.push([col, row]);
+				}
+			}
+
+			const palettes = [
+				[0xfffbf4, 0xf2eee5, 0xe6e2d9],
+				[0xffd7e7, 0xffafd0, 0xffc4dd, 0xf296bd, 0xffe7ef],
+				[0x8a5437, 0x6b3d2a, 0xa26947],
+				[0x58ac32, 0x788b35, 0x438a29],
+				[0xce819d, 0xd991aa, 0xe0a5b8, 0xc96f91, 0xbb8490],
+			] as const;
+			const dummy = new THREE.Object3D();
+			const color = new THREE.Color();
+			const blockMaterial = new THREE.MeshLambertMaterial();
+			const blockMesh = new THREE.InstancedMesh(
+				new THREE.BoxGeometry(BLOCK * 0.94, BLOCK * 0.94, BLOCK * 0.94),
+				blockMaterial,
+				blocks.length,
+			);
+			for (let index = 0; index < blocks.length; index++) {
+				const block = blocks[index];
+				dummy.position.set(
+					(block.col - GRID_CENTRE + 0.5) * BLOCK,
+					(block.layer + 0.5) * BLOCK,
+					(block.row - GRID_CENTRE + 0.5) * BLOCK,
+				);
+				dummy.rotation.set(0, 0, 0);
+				dummy.scale.setScalar(1);
+				dummy.updateMatrix();
+				blockMesh.setMatrixAt(index, dummy.matrix);
+				const palette = palettes[block.type];
+				color.set(palette[Math.floor(random(block.col, block.row, block.layer + block.type * 17) * palette.length)]);
+				color.offsetHSL((random(block.row, block.col, block.layer) - 0.5) * 0.018, 0, (random(block.col, block.layer, block.row) - 0.5) * 0.045);
+				blockMesh.setColorAt(index, color);
+			}
+			blockMesh.frustumCulled = false;
+			blockMesh.instanceMatrix.needsUpdate = true;
+			if (blockMesh.instanceColor) blockMesh.instanceColor.needsUpdate = true;
+			world.add(blockMesh);
+
+			const segments: Segment[] = [];
+			const tips: Tip[] = [];
+			const treeRadius = QR.length * CANOPY_RATIO * SOURCE_BLOCK;
+			const maxHeight = metrics.trunkHeight + 1.5 * treeRadius;
+			const minHeight = metrics.trunkHeight * 0.5;
+			const pushSegment = (
+				start: [number, number, number],
+				end: [number, number, number],
+				startRadius: number,
+				endRadius: number,
+			) => {
+				if (segments.length < 485) segments.push({ start, end, startRadius, endRadius });
+			};
+
+			for (let index = 0; index < 10; index++) {
+				const a = index / 10;
+				const b = (index + 1) / 10;
+				const point = (t: number): [number, number, number] => [
+					metrics.trunkLean * t * t + 0.3 * metrics.trunkLean * Math.sin(t * Math.PI * 1.5),
+					metrics.trunkHeight * t,
+					0.5 * metrics.trunkLean * Math.sin(t * Math.PI * 0.8),
+				];
+				const radius = (t: number) =>
+					metrics.trunkRadius * (1 - 0.55 * t) * (1 + 0.08 * Math.sin(t * Math.PI * 0.8));
+				pushSegment(point(a), point(b), radius(a), radius(b));
+			}
+
+			const branch = (
+				start: [number, number, number],
+				startRadius: number,
+				end: [number, number, number],
+				endRadius: number,
+				angle: number,
+				_depth: number,
+			) => {
+				if (segments.length >= 485) return;
+				pushSegment(start, end, startRadius, endRadius);
+				const children = 1 + Math.floor(2 * treeRandom(segments.length, 0, 500));
+				for (let child = 0; child < children && segments.length < 485; child++) {
+					const childAngle = angle + 2.2 * (treeRandom(segments.length, child, 600) - 0.5);
+					const length = treeRadius * (0.15 + 0.2 * treeRandom(segments.length, child, 700)) * metrics.branchLengthScale;
+					const elevation = 0.1 + 0.45 * treeRandom(segments.length, child, 750);
+					const childRadius = endRadius * (0.5 + 0.2 * treeRandom(segments.length, child, 800));
+					let x = end[0] + Math.cos(childAngle) * Math.cos(elevation) * length;
+					const y = Math.max(Math.min(end[1] + Math.sin(elevation) * length, maxHeight), minHeight);
+					let z = end[2] + Math.sin(childAngle) * Math.cos(elevation) * length;
+					const radial = Math.hypot(x, z);
+					if (radial > treeRadius * 0.95) {
+						x *= (treeRadius * 0.95) / radial;
+						z *= (treeRadius * 0.95) / radial;
+					}
+					const childEnd: [number, number, number] = [x, y, z];
+					const twigRadius = childRadius * 0.4;
+					pushSegment(end, childEnd, childRadius, twigRadius);
+					tips.push({ x, y, z, radius: 25 * twigRadius });
+					if (metrics.maxDepth >= 4 && segments.length < 485) {
+						const shootAngle = childAngle + 2.2 * (treeRandom(segments.length, child, 860) - 0.5);
+						const shootLength = length * 0.45;
+						const shootElevation = 0.1 + 0.35 * treeRandom(segments.length, child, 870);
+						const shootRadius = twigRadius * 0.5;
+						let shootX = x + Math.cos(shootAngle) * Math.cos(shootElevation) * shootLength;
+						const shootY = Math.max(Math.min(y + Math.sin(shootElevation) * shootLength, maxHeight), minHeight);
+						let shootZ = z + Math.sin(shootAngle) * Math.cos(shootElevation) * shootLength;
+						const shootRadial = Math.hypot(shootX, shootZ);
+						if (shootRadial > treeRadius * 0.95) {
+							shootX *= (treeRadius * 0.95) / shootRadial;
+							shootZ *= (treeRadius * 0.95) / shootRadial;
+						}
+						pushSegment(childEnd, [shootX, shootY, shootZ], twigRadius, shootRadius * 0.3);
+						tips.push({ x: shootX, y: shootY, z: shootZ, radius: 15 * shootRadius });
+					}
+				}
+			};
+
+			const trunkPoint = (t: number): [number, number, number] => [
+				metrics.trunkLean * t * t + 0.3 * metrics.trunkLean * Math.sin(t * Math.PI * 1.5),
+				metrics.trunkHeight * t,
+				0.5 * metrics.trunkLean * Math.sin(t * Math.PI * 0.8),
+			];
+			const crownStart = trunkPoint(0.95);
+			const crownCount = 3 + Math.floor(2 * treeRandom(0, 0, 2000));
+			for (let index = 0; index < crownCount; index++) {
+				const angle = (index / crownCount) * Math.PI * 2 + 0.5 * treeRandom(index, 0, 2100);
+				const length = treeRadius * (0.1 + 0.25 * treeRandom(index, 0, 2200));
+				let start = crownStart;
+				let startRadius = metrics.trunkRadius * (0.3 + 0.12 * treeRandom(index, 0, 2300));
+				const steps = 2 + Math.floor(treeRandom(index, 0, 2400));
+				for (let step = 0; step < steps; step++) {
+					const t = (step + 1) / steps;
+					const end: [number, number, number] = [
+						crownStart[0] + Math.cos(angle) * length * t + 0.01 * (treeRandom(index, step, 2500) - 0.5),
+						crownStart[1] + (maxHeight - crownStart[1]) * t * (0.7 + 0.3 * treeRandom(index, step, 2700)),
+						crownStart[2] + Math.sin(angle) * length * t + 0.01 * (treeRandom(index, step, 2600) - 0.5),
+					];
+					const endRadius = startRadius * (0.5 + 0.1 * treeRandom(index, step, 2800));
+					pushSegment(start, end, startRadius, endRadius);
+					start = end;
+					startRadius = endRadius;
+				}
+				tips.push({ x: start[0], y: start[1], z: start[2], radius: 35 * startRadius });
+				branch(
+					start,
+					startRadius * 0.7,
+					[
+						start[0] + (treeRandom(index, 0, 3000) - 0.5) * treeRadius * 0.35,
+						Math.max(Math.min(start[1] + 0.08 * treeRadius, maxHeight), minHeight),
+						start[2] + (treeRandom(index, 0, 3100) - 0.5) * treeRadius * 0.35,
+					],
+					startRadius * 0.3,
+					angle,
+					2,
+				);
+			}
+
+			for (let index = 0; index < metrics.mainBranches; index++) {
+				const base = trunkPoint(0.7 + 0.25 * treeRandom(index, 0, 1200));
+				const angle = (index / metrics.mainBranches) * Math.PI * 2 + 0.4 * (treeRandom(index, 0, 900) - 0.5);
+				const length = treeRadius * (0.6 + 0.35 * treeRandom(index, 0, 1000));
+				const target: [number, number, number] = [
+					Math.cos(angle) * length,
+					metrics.trunkHeight * (0.8 + 0.2 * treeRandom(index, 0, 1050)),
+					Math.sin(angle) * length,
+				];
+				let start = base;
+				let startRadius = metrics.trunkRadius * (0.4 + 0.15 * treeRandom(index, 0, 1100));
+				for (let step = 0; step < 3; step++) {
+					const t = (step + 1) / 3;
+					const arc = Math.sin(t * Math.PI) * treeRadius * 0.3;
+					const end: [number, number, number] = [
+						base[0] + (target[0] - base[0]) * t + 0.015 * (treeRandom(index, step, 150) - 0.5),
+						base[1] + (target[1] - base[1]) * t + arc * (1 - t),
+						base[2] + (target[2] - base[2]) * t + 0.015 * (treeRandom(index, step, 250) - 0.5),
+					];
+					const endRadius = startRadius * (0.55 + 0.1 * treeRandom(index, step, 350));
+					pushSegment(start, end, startRadius, endRadius);
+					if (step >= 1) {
+						branch(
+							end,
+							endRadius * 0.6,
+							[
+								end[0] + (treeRandom(index, step, 610) - 0.5) * treeRadius * 0.45,
+								Math.max(Math.min(end[1] + treeRadius * (0.05 + 0.1 * treeRandom(index, step, 620)), maxHeight), minHeight),
+								end[2] + (treeRandom(index, step, 630) - 0.5) * treeRadius * 0.45,
+							],
+							endRadius * 0.25,
+							angle,
+							2,
+						);
+					}
+					start = end;
+					startRadius = endRadius;
+				}
+				tips.push({ x: start[0], y: start[1], z: start[2], radius: 30 * startRadius });
+			}
+
+			const up = new THREE.Vector3(0, 1, 0);
+			const direction = new THREE.Vector3();
+			const centre = new THREE.Vector3();
+			const branchMaterial = new THREE.MeshLambertMaterial({ color: 0x714431, transparent: true });
+			const branchMesh = new THREE.InstancedMesh(
+				new THREE.CylinderGeometry(0.72, 1, 1, 5),
+				branchMaterial,
+				segments.length,
+			);
+			for (let index = 0; index < segments.length; index++) {
+				const segment = segments[index];
+				const start = new THREE.Vector3(...segment.start).multiplyScalar(SOURCE_SCALE);
+				const end = new THREE.Vector3(...segment.end).multiplyScalar(SOURCE_SCALE);
+				direction.subVectors(end, start);
+				centre.addVectors(start, end).multiplyScalar(0.5);
+				dummy.position.copy(centre);
+				dummy.quaternion.setFromUnitVectors(up, direction.clone().normalize());
+				dummy.scale.set(
+					Math.max(0.012, segment.startRadius * SOURCE_SCALE),
+					direction.length(),
+					Math.max(0.012, segment.startRadius * SOURCE_SCALE),
+				);
+				dummy.updateMatrix();
+				branchMesh.setMatrixAt(index, dummy.matrix);
+			}
+			branchMesh.frustumCulled = false;
+			world.add(branchMesh);
+
+			const blossomPoints: [number, number, number, number][] = [];
+			for (let index = 0; index < tips.length; index++) {
+				const tip = tips[index];
+				if (treeRandom(index, 0, 780) < 0.01) continue;
+				const distance = Math.hypot(tip.x, tip.z);
+				const spread = (1 + 0.45 * (1 - Math.min(1, distance / treeRadius))) * (1 + 0.3 * treeRandom(index, 3, 790));
+				const count = Math.max(40, Math.floor(60 * tip.radius * metrics.canopyDensity * spread));
+				const radius = tip.radius * SOURCE_BLOCK * 9 * spread;
+				for (let point = 0; point < count; point++) {
+					const seed = treeRandom(index, point, 800);
+					const angle = treeRandom(index, point, 810) * Math.PI * 2;
+					const vertical = 2 * treeRandom(index, point, 820) - 1;
+					const planar = Math.sqrt(1 - vertical * vertical);
+					const radial = radius * Math.cbrt(treeRandom(index, point, 830));
+					blossomPoints.push([
+						tip.x + radial * planar * Math.cos(angle) * 1.5,
+						tip.y + radial * vertical * 1.1 + radius * 0.1,
+						tip.z + radial * planar * Math.sin(angle) * 1.5,
+						seed,
+					]);
+				}
+				const hangingCount = 6 + Math.floor(6 * treeRandom(index, 0, 1500));
+				for (let hanging = 0; hanging < hangingCount; hanging++) {
+					const seed = treeRandom(index, hanging, 1600);
+					const angle = treeRandom(index, hanging, 1700) * Math.PI * 2;
+					blossomPoints.push([
+						tip.x + Math.cos(angle) * radius * 0.5,
+						tip.y - SOURCE_BLOCK * (0.5 + 2 * treeRandom(index, hanging, 1900)),
+						tip.z + Math.sin(angle) * radius * 0.5,
+						seed,
+					]);
+				}
+				if (treeRandom(index, 2, 900) < 0.5) {
+					const angle = treeRandom(index, 0, 920) * Math.PI * 2;
+					blossomPoints.push([
+						tip.x + Math.cos(angle) * radius * 0.4,
+						tip.y - SOURCE_BLOCK * 0.5,
+						tip.z + Math.sin(angle) * radius * 0.4,
+						treeRandom(index, 0, 910),
+					]);
+				}
+			}
+			const top = Math.max(...tips.map((tip) => tip.y));
+			const topCount = Math.floor(120 * Math.max(0.75, metrics.canopyDensity));
+			for (let index = 0; index < topCount; index++) {
+				const angle = treeRandom(index, 0, 5100) * Math.PI * 2;
+				const radius = treeRadius * 0.1 * Math.sqrt(treeRandom(index, 0, 5200));
+				blossomPoints.push([
+					Math.cos(angle) * radius,
+					top - 0.049 + (treeRandom(index, 0, 5300) - 0.35) * SOURCE_BLOCK * 8,
+					Math.sin(angle) * radius,
+					treeRandom(index, 0, 5400),
+				]);
+			}
+			const canopyRadiusCells = QR.length * CANOPY_RATIO;
+			const canopyBase = Math.round(12 * gridScale) * SOURCE_BLOCK;
+			for (let row = 0; row < QR.length; row++) {
+				for (let col = 0; col < QR.length; col++) {
+					const x = col - GRID_CENTRE;
+					const z = row - GRID_CENTRE;
+					const distanceSq = x * x + z * z;
+					if (distanceSq >= canopyRadiusSq || distanceSq < 6.25) continue;
+					const centreWeight = 1 - Math.sqrt(distanceSq) / canopyRadiusCells;
+					const baseLayers = Math.round(18 * gridScale);
+					const layers =
+						Math.max(4, Math.round(baseLayers * (0.25 + 0.75 * centreWeight ** 2))) +
+						Math.floor(6 * random(col, row, 500) * gridScale);
+					const crownTop =
+						canopyBase +
+						(layers - 1) * SOURCE_BLOCK +
+						Math.floor(4.5 * centreWeight * gridScale) * SOURCE_BLOCK +
+						SOURCE_BLOCK;
+					const petals = 4 + Math.floor(3 * random(col, row, 600));
+					for (let petal = 0; petal < petals; petal++) {
+						blossomPoints.push([
+							(col - GRID_CENTRE + 1.2 * (random(col, row, 800 + petal) - 0.5)) * SOURCE_BLOCK,
+							crownTop + (random(col, row, 1000 + petal) - 0.6) * SOURCE_BLOCK * 2,
+							(row - GRID_CENTRE + 1.2 * (random(col, row, 900 + petal) - 0.5)) * SOURCE_BLOCK,
+							random(col, row, 777 + petal),
+						]);
+					}
+					if (random(col, row, 1100) < 0.35) {
+						blossomPoints.push([
+							(col - GRID_CENTRE + 0.5 * (random(col, row, 1300) - 0.5)) * SOURCE_BLOCK,
+							crownTop - SOURCE_BLOCK,
+							(row - GRID_CENTRE + 0.5 * (random(col, row, 1400) - 0.5)) * SOURCE_BLOCK,
+							random(col, row, 1200) + 1,
+						]);
+					}
+				}
+			}
+
+			const makeSakuraGeometry = (petalCount: number, withCentre: boolean) => {
+				const positions: number[] = [];
+				const colours: number[] = [];
+				const shades = [
+					[0xd93861, 0xf28ba8],
+					[0xeb6688, 0xf8b5c6],
+					[0xf184a0, 0xfbd0da],
+					[0xef7896, 0xf9c1cf],
+					[0xf59eb3, 0xffe0e6],
+				];
+				const addVertex = (x: number, y: number, z: number, tint: { r: number; g: number; b: number }) => {
+					positions.push(x, y, z);
+					colours.push(tint.r, tint.g, tint.b);
+				};
+				const addPetalVertex = (petal: number, t: number, side: number) => {
+					const angle = (petal / Math.max(1, petalCount)) * Math.PI * 2;
+					const distance = t * 0.85;
+					const halfWidth = 0.38 * Math.sin(t * Math.PI) * Math.sqrt(1 - t * 0.3);
+					const curl = 0.72 * t * (1 - t);
+					const across = side * halfWidth;
+					const [root, tip] = shades[petal % shades.length];
+					const tint = new THREE.Color(root).lerp(new THREE.Color(tip), t);
+					if (t > 0.35 && t < 0.65) tint.multiplyScalar(0.94);
+					addVertex(
+						distance * Math.cos(angle) - across * Math.sin(angle),
+						curl,
+						distance * Math.sin(angle) + across * Math.cos(angle),
+						tint,
+					);
+				};
+				for (let petal = 0; petal < petalCount; petal++) {
+					for (let segment = 0; segment < 4; segment++) {
+						const start = segment / 4;
+						const end = (segment + 1) / 4;
+						addPetalVertex(petal, start, -1);
+						addPetalVertex(petal, start, 1);
+						addPetalVertex(petal, end, -1);
+						addPetalVertex(petal, end, -1);
+						addPetalVertex(petal, start, 1);
+						addPetalVertex(petal, end, 1);
+					}
+				}
+				if (withCentre) {
+					const centre = new THREE.Color(0xf2cf62);
+					const rim = new THREE.Color(0xe5b942);
+					for (let triangle = 0; triangle < 10; triangle++) {
+						const angle = (triangle / 10) * Math.PI * 2;
+						const next = ((triangle + 1) / 10) * Math.PI * 2;
+						addVertex(0, 0.14, 0, centre);
+						addVertex(Math.cos(angle) * 0.12, 0.13, Math.sin(angle) * 0.12, rim);
+						addVertex(Math.cos(next) * 0.12, 0.13, Math.sin(next) * 0.12, rim);
+					}
+				}
+				const geometry = new THREE.BufferGeometry();
+				geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+				geometry.setAttribute("color", new THREE.Float32BufferAttribute(colours, 3));
+				geometry.computeVertexNormals();
+				return geometry;
+			};
+
+			const flowerGeometry = makeSakuraGeometry(5, true);
+			const petalGeometry = makeSakuraGeometry(1, false);
+			const visibleBlossomPoints = blossomPoints.filter((point) => {
+				const seed = point[3];
+  return seed < 1 && (seed * 4.37) % 1 < 0.38;
+			});
+			const blossomMaterial = new THREE.MeshPhongMaterial({
+				vertexColors: true,
+				side: THREE.DoubleSide,
+				shininess: 6,
+				transparent: true,
+			});
+			const blossoms = new THREE.InstancedMesh(
+				flowerGeometry,
+				blossomMaterial,
+				visibleBlossomPoints.length,
+			);
+			blossoms.frustumCulled = false;
+			world.add(blossoms);
+
+			const fallingData = Array.from({ length: 10 }, (_, index) => {
+				const tip = tips[Math.floor(treeRandom(index, 0, 6100) * tips.length)];
+				return {
+					x: tip.x * SOURCE_SCALE,
+					y: tip.y * SOURCE_SCALE,
+					z: tip.z * SOURCE_SCALE,
+					seed: treeRandom(index, 0, 6200),
+				};
+			});
+			const fallingBlossoms = new THREE.InstancedMesh(
+				flowerGeometry,
+				blossomMaterial,
+				fallingData.length,
+			);
+			fallingBlossoms.frustumCulled = false;
+			world.add(fallingBlossoms);
+
+			const smoothstep = (min: number, max: number, value: number) => {
+				const t = THREE.MathUtils.clamp((value - min) / (max - min), 0, 1);
+				return t * t * (3 - 2 * t);
+			};
+			const updateBlossoms = (time: number, visibility: number) => {
+				for (let index = 0; index < visibleBlossomPoints.length; index++) {
+					const point = visibleBlossomPoints[index];
+					const seed = point[3];
+					const col = point[0] / SOURCE_BLOCK;
+					const row = point[2] / SOURCE_BLOCK;
+					const swayX =
+						(Math.sin(time * 0.45 + col * 0.25 + row * 0.15) * 0.028 +
+							Math.sin(time * 1.1 + col * 0.8 + row * 0.6) * 0.008) *
+						SOURCE_SCALE *
+						visibility;
+					const swayZ =
+						Math.sin(time * 0.35 + col * 0.15 + row * 0.25) *
+						0.018 *
+						SOURCE_SCALE *
+						visibility;
+					const tilt = seed * 0.25 + 0.05;
+					const tiltDirection = seed * Math.PI * 2 * 3.17;
+					dummy.position.set(
+						point[0] * SOURCE_SCALE + swayX,
+						point[1] * SOURCE_SCALE,
+						point[2] * SOURCE_SCALE + swayZ,
+					);
+					dummy.rotation.set(
+						tilt * Math.cos(tiltDirection),
+						seed * Math.PI * 2,
+						tilt * Math.sin(tiltDirection),
+					);
+					dummy.scale.setScalar(BLOCK * (0.7 + seed * 0.3) * visibility);
+					dummy.updateMatrix();
+					blossoms.setMatrixAt(index, dummy.matrix);
+				}
+				blossoms.instanceMatrix.needsUpdate = true;
+			};
+			const updateFallingBlossoms = (time: number, visibility: number) => {
+				for (let index = 0; index < fallingData.length; index++) {
+					const petal = fallingData[index];
+					const period = 8 + petal.seed * 6;
+					const cycle = ((time + petal.seed * 100) / period) % 1;
+					const fallVisibility =
+						smoothstep(0, 0.05, cycle) * (1 - smoothstep(0.95, 1, cycle)) * visibility;
+					const driftX =
+						(Math.sin(time * 0.45 + petal.seed * 5) * 0.045 +
+							Math.sin(time * 1.1 + petal.seed * 12) * 0.012) *
+						SOURCE_SCALE *
+						cycle;
+					const driftZ =
+						(Math.sin(time * 0.35 + petal.seed * 8) * 0.03 +
+							Math.cos(time * 0.8 + petal.seed * 3) * 0.01) *
+						SOURCE_SCALE *
+						cycle;
+					const tilt = 0.3 + cycle * 1.2 + Math.sin(time * 0.9 + petal.seed * 7) * 0.4;
+					const tiltDirection = time * (0.5 + petal.seed * 0.8) + petal.seed * Math.PI * 2;
+					dummy.position.set(
+						petal.x + driftX,
+						THREE.MathUtils.lerp(petal.y, BLOCK * 1.5, cycle),
+						petal.z + driftZ,
+					);
+					dummy.rotation.set(
+						tilt * Math.cos(tiltDirection),
+						petal.seed * Math.PI * 2 + time * (0.8 + petal.seed * 1.2),
+						tilt * Math.sin(tiltDirection),
+					);
+					dummy.scale.setScalar(BLOCK * (0.5 + petal.seed * 0.3) * fallVisibility);
+					dummy.updateMatrix();
+					fallingBlossoms.setMatrixAt(index, dummy.matrix);
+				}
+				fallingBlossoms.instanceMatrix.needsUpdate = true;
+			};
+			updateBlossoms(0, 1);
+			updateFallingBlossoms(0, 1);
+
+			const grassMaterial = new THREE.MeshLambertMaterial({ transparent: true });
+			const grassMesh = new THREE.InstancedMesh(
+				new THREE.ConeGeometry(BLOCK * 0.065, 1, 3),
+				grassMaterial,
+				grassCells.length * 22,
+			);
+			let grassIndex = 0;
+			for (const [col, row] of grassCells) {
+				const bladeCount = 14 + Math.floor(8 * random(col, row, 5000));
+				for (let blade = 0; blade < bladeCount; blade++) {
+					const seed = random(col, row, 5100 + blade);
+					const height = BLOCK * (0.5 + 1.2 * random(col, row, 5500 + blade));
+					dummy.position.set(
+						(col - GRID_CENTRE + 0.5 + 0.85 * (random(col, row, 5200 + blade) - 0.5)) * BLOCK,
+						BLOCK + height * 0.5,
+						(row - GRID_CENTRE + 0.5 + 0.85 * (random(col, row, 5400 + blade) - 0.5)) * BLOCK,
+					);
+					dummy.rotation.set((seed - 0.5) * 0.22, seed * Math.PI * 2, (seed - 0.5) * 0.3);
+					dummy.scale.set(0.75 + seed * 0.55, height, 0.75 + seed * 0.55);
+					dummy.updateMatrix();
+					grassMesh.setMatrixAt(grassIndex, dummy.matrix);
+					grassMesh.setColorAt(
+						grassIndex,
+						color.set(seed < 0.22 ? 0xf0abc6 : seed > 0.55 ? 0x66d039 : 0x8ce151),
+					);
+					grassIndex++;
+				}
+			}
+			grassMesh.count = grassIndex;
+			grassMesh.frustumCulled = false;
+			if (grassMesh.instanceColor) grassMesh.instanceColor.needsUpdate = true;
+			world.add(grassMesh);
+
+			const groundPetalMaterial = blossomMaterial.clone();
+			const groundPetals = new THREE.InstancedMesh(
+				petalGeometry,
+				groundPetalMaterial,
+				80,
+			);
+			for (let index = 0; index < 80; index++) {
+				const angle = treeRandom(index, 0, 4000) * Math.PI * 2;
+				const radial = treeRadius * (0.1 + treeRandom(index, 0, 4100) ** 2 * 0.75) * SOURCE_SCALE;
+				dummy.position.set(Math.cos(angle) * radial, BLOCK * 1.04, Math.sin(angle) * radial);
+				dummy.rotation.set(
+					0.08 + treeRandom(index, 0, 4200) * 0.22,
+					angle,
+					(treeRandom(index, 0, 4300) - 0.5) * 0.22,
+				);
+				dummy.scale.setScalar(BLOCK * (0.42 + treeRandom(index, 0, 4400) * 0.24));
+				dummy.updateMatrix();
+				groundPetals.setMatrixAt(index, dummy.matrix);
+			}
+			groundPetals.frustumCulled = false;
+			world.add(groundPetals);
+
+			const platform = new THREE.Mesh(
+				new THREE.BoxGeometry(QR.length * BLOCK + 0.08, 0.13, QR.length * BLOCK + 0.08),
+				new THREE.MeshLambertMaterial({ color: 0xc4c1bd }),
+			);
+			platform.position.y = -0.065;
+			world.add(platform);
+
+			const isoPosition = new THREE.Vector3(6.8, 8.1, 7.5);
+			const flatPosition = new THREE.Vector3(0, 11.5, 0.001);
+			const isoTarget = new THREE.Vector3(0, 2.35, 0);
+			const flatTarget = new THREE.Vector3(0, 0, 0);
+			const isoUp = new THREE.Vector3(0, 1, 0);
+			const flatUp = new THREE.Vector3(0, 0, -1);
+			const cameraTarget = new THREE.Vector3();
+			const cameraUp = new THREE.Vector3();
+			let progress = 0;
+			let targetProgress = 0;
+			let frameId = 0;
+			let lastTime = 0;
+			let looping = false;
+			const viewportHeight = 9.1;
+
+			const resize = () => {
+				const width = Math.max(1, host.clientWidth);
+				const height = Math.max(1, host.clientHeight);
+				const aspect = width / height;
+				camera.left = (-viewportHeight * aspect) / 2;
+				camera.right = (viewportHeight * aspect) / 2;
+				camera.top = viewportHeight / 2;
+				camera.bottom = -viewportHeight / 2;
+				camera.updateProjectionMatrix();
+				renderer.setSize(width, height, false);
+				start();
+			};
+
+			const render = (time: number) => {
+				const eased = progress * progress * (3 - 2 * progress);
+				camera.position.lerpVectors(isoPosition, flatPosition, eased);
+				cameraTarget.lerpVectors(isoTarget, flatTarget, eased);
+				cameraUp.lerpVectors(isoUp, flatUp, eased).normalize();
+				camera.up.copy(cameraUp);
+				camera.zoom = THREE.MathUtils.lerp(1, 1.27, eased);
+				renderer.toneMappingExposure = THREE.MathUtils.lerp(1.7, 0.9, eased);
+				camera.lookAt(cameraTarget);
+				camera.updateProjectionMatrix();
+
+				const detail = Math.max(0.001, 1 - eased);
+				const petalDetail = detail * detail;
+				const blossomVisibility = smoothstep(0, 0.6, 1 - eased);
+				const volumeDetail = Math.max(0.001, 1 - THREE.MathUtils.smoothstep(eased, 0.55, 1));
+				branchMaterial.opacity = volumeDetail;
+				blossomMaterial.opacity = blossomVisibility;
+				grassMaterial.opacity = volumeDetail;
+				groundPetalMaterial.opacity = petalDetail;
+				branchMesh.visible = volumeDetail > 0.01;
+				blossoms.visible = blossomVisibility > 0.01;
+				fallingBlossoms.visible = blossomVisibility > 0.01;
+				grassMesh.visible = volumeDetail > 0.01;
+				groundPetals.visible = petalDetail > 0.01;
+				if (blossoms.visible) {
+					updateBlossoms(time, blossomVisibility);
+					updateFallingBlossoms(time, blossomVisibility);
+				}
+				renderer.render(scene, camera);
+				host.dataset.drawCalls = String(renderer.info.render.calls);
+			};
+
+			const frame = (time: number) => {
+				const dt = lastTime ? Math.min((time - lastTime) * 0.001, 0.05) : 0;
+				lastTime = time;
+				const alpha = reducedMotion.matches ? 1 : 1 - Math.exp(-5.4 * dt);
+				progress += (targetProgress - progress) * alpha;
+				if (Math.abs(targetProgress - progress) < 0.001) progress = targetProgress;
+				render(time * 0.001);
+				if (progress !== targetProgress || (targetProgress === 0 && !reducedMotion.matches)) {
+					frameId = requestAnimationFrame(frame);
+				} else stop();
+			};
+
+			function start() {
+				if (looping || !shouldShow() || document.hidden) return;
+				looping = true;
+				lastTime = 0;
+				frameId = requestAnimationFrame(frame);
+			}
+
+			function stop() {
+				if (!looping) return;
+				looping = false;
+				cancelAnimationFrame(frameId);
+			}
+
+			const toggle = () => {
+				targetProgress = targetProgress === 1 ? 0 : 1;
+				host.ariaPressed = String(targetProgress === 1);
+				host.title = targetProgress === 1 ? "点击查看樱花树" : "点击查看本站二维码";
+				host.ariaLabel = targetProgress === 1 ? "将本站二维码还原为樱花树" : "将樱花树展开为本站二维码";
+				start();
+			};
+
+			host.addEventListener("click", toggle);
+			new ResizeObserver(resize).observe(host);
+			resize();
+			host.dataset.blocks = String(blocks.length);
+			host.dataset.branches = String(segments.length);
+			host.dataset.blossoms = String(visibleBlossomPoints.length + fallingData.length);
+			host.dataset.ready = "true";
+			controller = { start, stop };
+			start();
+		} catch (error) {
+			console.error("Cherry QR tree failed to initialize", error);
+			host.dataset.ready = "failed";
+			host.hidden = true;
+		}
+	}
+
+	const sync = () => {
+		if (!host) return;
+		const visible = shouldShow();
+		host.hidden = !visible;
+		if (visible) {
+			void createScene();
+			controller?.start();
+		} else controller?.stop();
+	};
+
+	desktop.addEventListener("change", sync);
+	reducedMotion.addEventListener("change", sync);
+	document.addEventListener("visibilitychange", sync);
+	window.addEventListener("popstate", sync);
+	const swup = (window as Window & {
+		swup?: { hooks: { on: (name: string, callback: () => void) => void } };
+	}).swup;
+	if (swup) swup.hooks.on("page:view", sync);
+	else {
+		document.addEventListener("swup:enable", () => {
+			(window as Window & {
+				swup?: { hooks: { on: (name: string, callback: () => void) => void } };
+			}).swup?.hooks.on("page:view", sync);
+		});
+	}
+	sync();
+</script>
