@@ -48,6 +48,7 @@ export const navBarConfig: NavBarConfig = {
 		LinkPreset.About,
 		{ name: "Friends", url: "/links/" },
 		LinkPreset.Moment,
+		{ name: "Space", url: "https://www.evanyuki.com/", external: true },
 	],
 };
 
